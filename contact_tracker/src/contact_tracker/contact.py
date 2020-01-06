@@ -1,5 +1,14 @@
+#!/usr/env/bin python
+# Class to create a Contact object and initialize its
+# associated Kalman filters.
+
+# Author: Rachel White
+# University of New Hampshire
+# Last Modified: 01/08/2020
+
+
 import rospy
-from std_msgs.msg import String
+import numpy as np
 
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update

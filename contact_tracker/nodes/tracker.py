@@ -3,7 +3,7 @@
 # A contact is identifed by position, not id, and is
 # independent of the sensor that produced it. 
 
-# Rachel White
+# Author: Rachel White
 # University of New Hampshire
 # Date last modified: 01/07/2020
 
@@ -11,6 +11,7 @@ import math
 import time
 import rospy
 import datetime
+import numpy as np
 
 import kalman_tracker.contact
 from marine_msgs.msgs import Detect
@@ -19,7 +20,10 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 
+
+# TODO: Move these to a config file
 MAX_TIME = 50.00
+INITIAL_VELOCITY = 5**2
 dt = 1
 
 class KalmanTracker:
@@ -52,7 +56,9 @@ class KalmanTracker:
         Listen for detects and add to dictionary and filter if not already there. 
         """
        
+        ####################################
         ####### INITIALIZE VARIABLES #######
+        ####################################
 
         # Get necessary info from the Detect data
         detect_info = {
@@ -103,13 +109,15 @@ class KalmanTracker:
         contact_id = (x_pos, y_pos) # TODO: Refine this to account for movement in the contact
         timestamp = datetime.datetime.now().timestamp()
 
-
-        ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
         
+        #######################################################
+        ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
+        #######################################################
+
         # Create new contact object.
         if detect_not_already_contact(self.all_contacts, contact_id): 
             
-            # If there was no velocity, the vector will only have two fields
+            # If there was no velocity, the state vector will only have two values. 
             kf = None 
             if x_vel == 0:
                 kf = KalmanFilter(dim_x=2, dim_z=2)
@@ -131,9 +139,9 @@ class KalmanTracker:
             c = all_contacts[contact_id]
             c.last_accessed = timestamp 
 
-        # Integrate this with self.kalman_filter 
+        # Add to self.kalman_filter 
         c.kf.predict()
-        c.kf.update(c.z)
+        c.kf.update([c.detect_info['x_pos'], c.detect_info['y_pos'])
 
         # Remove items from the dictionary that have not been accessed in a while    
         for item in self.all_contacts:
