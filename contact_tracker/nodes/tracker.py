@@ -13,8 +13,8 @@ import rospy
 import datetime
 import numpy as np
 
-import kalman_tracker.contact
-from marine_msgs.msgs import Detect
+import contact_tracker.contact 
+from marine_msgs.msg import Detect
 
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
@@ -27,16 +27,16 @@ INITIAL_VELOCITY = 5**2
 dt = 1
 
 class KalmanTracker:
-   """ 
-   Class to create custom Kalman filter.
-   """ 
+    """ 
+    Class to create custom Kalman filter.
+    """ 
 
 
-   def __init__(self):
-       """
-       Define the constructor.
-       """
-       self.all_contacts = {}
+    def __init__(self):
+        """
+        Define the constructor.
+        """
+        self.all_contacts = {}
 
 
     def detect_not_already_contact(all_contacts, hash_key):
@@ -101,10 +101,11 @@ class KalmanTracker:
 
         
         # Check to see that if one coordinate is not NaN, neither is the other 
-        if (detect_info['x_pos'] != 0 and detect_info['y_pos'] == 0) or (detect_info['x_pos'] == 0 and detect_info['y_pos'] != 0):
-            continue # TODO: figure out what to do in these cases? 
-        if (detect_info['x_vel'] != 0 and detect_info['y_vel'] == 0) or (detect_info['x_vel'] == 0 and detect_info['y_vel'] != 0):
-            continue
+        if ((detect_info['x_pos'] != 0 and detect_info['y_pos'] == 0) or (detect_info['x_pos'] == 0 and detect_info['y_pos'] != 0)):
+           pass 
+            # TODO: figure out what to do in these cases? 
+        if ((detect_info['x_vel'] != 0 and detect_info['y_vel'] == 0) or (detect_info['x_vel'] == 0 and detect_info['y_vel'] != 0)):
+           pass 
 
         contact_id = (x_pos, y_pos) # TODO: Refine this to account for movement in the contact
         timestamp = datetime.datetime.now().timestamp()
@@ -141,7 +142,7 @@ class KalmanTracker:
 
         # Add to self.kalman_filter 
         c.kf.predict()
-        c.kf.update([c.detect_info['x_pos'], c.detect_info['y_pos'])
+        c.kf.update([c.detect_info['x_pos'], c.detect_info['y_pos']])
 
         # Remove items from the dictionary that have not been accessed in a while    
         for item in self.all_contacts:

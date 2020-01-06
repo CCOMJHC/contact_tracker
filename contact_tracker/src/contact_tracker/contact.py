@@ -1,4 +1,4 @@
-#!/usr/env/bin python
+#!/usr/bin/env python
 # Class to create a Contact object and initialize its
 # associated Kalman filters.
 
@@ -33,64 +33,69 @@ class Contact:
 
     def init_kf(self, dt):
         """
-        Initialize the kalman filter for this contact.
+        Initialize the kalman filter for this contact without values for velocity.
         """
 
-       # Define the state variable vector
-       self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']]) 
+        # Define the state variable vector
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']]) 
        
-       # Define the state covariance matrix
-       self.kf.P = np.array([self.info['pos_cov'][0], 0, 
-                             0, self.info['pos_cov'][7])]
+        # Define the state covariance matrix
+        self.kf.P = np.array([self.info['pos_cov'][0], 0, 
+                             0, self.info['pos_cov'][7]])
  
-       # Define the noise covariance (TBD)
-       self.kf.Q = 0             
+        # Define the noise covariance (TBD)
+        self.kf.Q = 0             
 
-       # Define the process model matrix
-       fu = np.array([1, dt, 
-                      0, 1)]
-       self.kf.F = self.kf.x.dot(fu)    
+        # Define the process model matrix
+        fu = np.array([1, dt, 
+                      0, 1])
+        self.kf.F = self.kf.x.dot(fu)    
 
-       # Define the measurement function
-       self.kf.H = np.array([1, 0,
-                             0, 1)]
+        # Define the measurement function
+        self.kf.H = np.array([1, 0,
+                             0, 1])
 
-       # Define the measurement covariance
-       self.kf.R = 
+        # Define the measurement covariance
+        self.kf.R = np.array([V, 0,
+                             0, V])
 
 
     def init_kf_with_velocity(self, dt):
         """
-        Initialize the kalman filter for this contact.
+        Initialize the kalman filter including velocity values for this contact.
         """
 
-       # Define the state variable vector
-       self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]) 
+        # Define the state variable vector
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]) 
        
-       # Define the state covariance matrix
-       self.kf.P = np.array([self.info['pos_cov'][0], 0, 0, 0,
+        # Define the state covariance matrix
+        self.kf.P = np.array([self.info['pos_cov'][0], 0, 0, 0,
                              0, self.info['pos_cov'][7], 0 , 0,
                              0, 0, self.info['twist_cov'][0], 0,
                              0, 0, 0, self.info['twist_cov'][7]
-                             )]    
+                             ])   
  
-       # Define the noise covariance (TBD)
-       self.kf.Q = 0             
+        # Define the noise covariance (TBD)
+        self.kf.Q = 0             
 
-       # Define the process model matrix
-       fu = np.array([1, 0, dt, 0,
+        # Define the process model matrix
+        fu = np.array([1, 0, dt, 0,
                       0, 1, 0, dt, 
                       0, 0, 1, 0,
                       0, 0, 0, 1])
-       self.kf.F = self.kf.x.dot(fu)    
+        self.kf.F = self.kf.x.dot(fu)    
 
-       # Define the measurement function
-       self.kf.H = np.array([1, 0, 0, 0,
+        # Define the measurement function
+        self.kf.H = np.array([1, 0, 0, 0,
                              0, 1, 0, 0,
                              0, 0, 1, 0,
                              0, 0, 0, 1])
 
-       # Define the measurement covariance
-       self.kf.R = 
+        # Define the measurement covariance
+        # Initially we estimate the value of V, i.e., the variance in our measurement I think?
+        self.kf.R = np.array([V, 0, 0, 0,
+                             0, V, 0, 0,
+                             0, 0, V, 0,
+                             0, 0, 0, V]) 
 
 
