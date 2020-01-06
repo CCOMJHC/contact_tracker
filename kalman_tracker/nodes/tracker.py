@@ -7,6 +7,8 @@
 import math
 import time
 import rospy
+import hashlib
+import datetime
 
 from filterpy.kalman import KalmanFilter
 
@@ -31,19 +33,34 @@ class KalmanTracker:
         """
         Listen for detects and add to dictionary and filter if not already there. 
         """
+       
+        # Get necessary info from the Detect data
+        x0 = 
+        R = 
+        z = 
+        timestamp = datetime.now()
         
-        c = Contact(data.Detect)  # TODO; create contact object
-        if detect_is_contact(self.all_contacts, c): 
+        # Generate new hash key
+        hash_str = str(datetime.datetime.now().timestamp())
+        hash_object = hashlib.md5(hash_str.encode())
+        hash_key = hash_object.hexdigest()
+
+        if detect_is_contact(self.all_contacts, hash_key): 
+            # Create new contact object
+            c = Contact(x0, R, z, timestamp, hash_key)  
+
             # Integrate this with self.kalman_filter 
             self.kalman_filter.predict()
             self.kalman_filter.update(c.z)
 
             # Also add to all_contacts
-            self.all_contacts[new_hash] = c
+            self.all_contacts[hash_key] = c
          
         else:
             # update the time stamp for when this contact was last accessed so we know not
             # to remove it anytime soon.
+            c = all_contacts[hash_key]
+            c.last_accessed = datetime.now()
 
         # TODO: remove items from the dictionary that have not been accessed in a while    
 
