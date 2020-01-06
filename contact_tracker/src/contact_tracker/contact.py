@@ -14,7 +14,8 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 
-
+dt = 1
+V = 0.1
 class Contact:
     """
     Class to create contact object with its own KalmanFilter.
@@ -26,8 +27,8 @@ class Contact:
         """
 
         self.info = detect_info
-        self.kf = kf 
-        self.last_accessed = timestamp 
+        self.kf = kf
+        self.last_accessed = timestamp
         self.id = contact_id
 
 
@@ -37,19 +38,19 @@ class Contact:
         """
 
         # Define the state variable vector
-        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']]) 
-       
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']])
+
         # Define the state covariance matrix
-        self.kf.P = np.array([self.info['pos_cov'][0], 0, 
-                             0, self.info['pos_cov'][7]])
- 
+        self.kf.P = np.array([[self.info['pos_covar'][0], 0],
+                             [0, self.info['pos_covar'][7]]])
+
         # Define the noise covariance (TBD)
-        self.kf.Q = 0             
+        self.kf.Q = 0
 
         # Define the process model matrix
-        fu = np.array([1, dt, 
-                      0, 1])
-        self.kf.F = self.kf.x.dot(fu)    
+        fu = np.array([[1, dt],
+                      [0, 1]])
+        self.kf.F = fu.dot(self.kf.x)
 
         # Define the measurement function
         self.kf.H = np.array([1, 0,
@@ -66,24 +67,24 @@ class Contact:
         """
 
         # Define the state variable vector
-        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]) 
-       
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']])
+
         # Define the state covariance matrix
-        self.kf.P = np.array([self.info['pos_cov'][0], 0, 0, 0,
-                             0, self.info['pos_cov'][7], 0 , 0,
-                             0, 0, self.info['twist_cov'][0], 0,
-                             0, 0, 0, self.info['twist_cov'][7]
-                             ])   
- 
+        self.kf.P = np.array([self.info['pos_covar'][0], 0, 0, 0,
+                             0, self.info['pos_covar'][7], 0 , 0,
+                             0, 0, self.info['twist_covar'][0], 0,
+                             0, 0, 0, self.info['twist_covar'][7]
+                             ])
+
         # Define the noise covariance (TBD)
-        self.kf.Q = 0             
+        self.kf.Q = 0
 
         # Define the process model matrix
         fu = np.array([1, 0, dt, 0,
-                      0, 1, 0, dt, 
+                      0, 1, 0, dt,
                       0, 0, 1, 0,
                       0, 0, 0, 1])
-        self.kf.F = self.kf.x.dot(fu)    
+        self.kf.F = self.kf.x.dot(fu)
 
         # Define the measurement function
         self.kf.H = np.array([1, 0, 0, 0,
@@ -96,6 +97,4 @@ class Contact:
         self.kf.R = np.array([V, 0, 0, 0,
                              0, V, 0, 0,
                              0, 0, V, 0,
-                             0, 0, 0, V]) 
-
-
+                             0, 0, 0, V])
