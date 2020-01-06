@@ -10,9 +10,12 @@ import rospy
 import hashlib
 import datetime
 
-from filterpy.kalman import KalmanFilter
-
 import kalman_tracker.contact
+
+from filterpy.kalman import KalmanFilter
+from filterpy.kalman import update
+from filterpy.kalman import predict
+
 
 
 class KalmanTracker:
@@ -25,8 +28,19 @@ class KalmanTracker:
        """
        Define the constructor.
        """
-       self.kalman_filter = KalmanFilter(dim_x=6, dim_z=6) # TODO: determine the parameters to pass here
        self.all_contacts = {}
+
+
+    def detect_is_contact(all_contacts, hash_key):
+        """
+        Returns true if this contact is already in the dictionary, 
+        false otherwise.
+        """
+
+        if hash_key in all_contacts:
+            return true
+        
+        return false
 
 
     def callback(self, data):
@@ -36,8 +50,6 @@ class KalmanTracker:
        
         # Get necessary info from the Detect data
         x0 = 
-        R = 
-        z = 
         timestamp = datetime.now()
         
         # Generate new hash key
@@ -47,11 +59,12 @@ class KalmanTracker:
 
         if detect_is_contact(self.all_contacts, hash_key): 
             # Create new contact object
-            c = Contact(x0, R, z, timestamp, hash_key)  
+            kf = KalmanFilter(dim_x=6, dim_z=6)
+            c = Contact(x0, kf, timestamp, hash_key)  
 
             # Integrate this with self.kalman_filter 
-            self.kalman_filter.predict()
-            self.kalman_filter.update(c.z)
+            c.kf.predict()
+            c.kf.update(c.z)
 
             # Also add to all_contacts
             self.all_contacts[hash_key] = c
@@ -61,6 +74,8 @@ class KalmanTracker:
             # to remove it anytime soon.
             c = all_contacts[hash_key]
             c.last_accessed = datetime.now()
+
+            # TODO: Figure out if I need to call predict and update here too
 
         # TODO: remove items from the dictionary that have not been accessed in a while    
 
