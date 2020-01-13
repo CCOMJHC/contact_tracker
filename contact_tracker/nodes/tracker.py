@@ -25,6 +25,7 @@ from filterpy.kalman import predict
 MAX_TIME = 50.00
 INITIAL_VELOCITY = 5**2
 dt = 1
+DEBUG = True
 
 class KalmanTracker:
     """
@@ -56,11 +57,13 @@ class KalmanTracker:
         Listen for detects and add to dictionary and filter if not already there.
         """
         
-        rospy.loginfo(data.p)
-
         ####################################
         ####### INITIALIZE VARIABLES #######
         ####################################
+
+        if DEBUG:
+            rospy.loginfo('initializing variables for new detect message:')
+            rospy.loginfo(data.p)
 
         # Get necessary info from the Detect data
         detect_info = {
@@ -81,6 +84,9 @@ class KalmanTracker:
                 'z_pos': 0,
                 'z_vel': 0
                 }
+
+        if DEBUG:
+            rospy.loginfo('checking for NaNs')
 
         # Assign values only if they are not NaNs
         if data.p.pose.pose.position.x != 'NaN':
@@ -110,7 +116,7 @@ class KalmanTracker:
            pass
 
         contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
-        timestamp = str(datetime.datetime.now())
+        timestamp = datetime.datetime.now()
 
 
         #######################################################
@@ -119,18 +125,22 @@ class KalmanTracker:
 
         # Create new contact object.
         if not contact_id in self.all_contacts:
-
+          
             # If there was no velocity, the state vector will only have two values.
             kf = None
             if detect_info['x_vel'] == 0:
+                rospy.loginfo('instantiating first-order Kalman filter')
                 kf = KalmanFilter(dim_x=2, dim_z=2)
             else:
-                kf = KalmanFilter(dim_x=4, dim_z=4)
+                rospy.loginfo('instantiating second-order Kalman filter')
+                kf = KalmanFilter(dim_x=4, dim_z=2)
 
             c = contact_tracker.contact.Contact(detect_info, kf, timestamp, contact_id)
             if kf.dim_x == 2:
+                rospy.loginfo('initializing first-order Kalman filter variables')
                 c.init_kf(dt)
             else:
+                rospy.loginfo('initiaizing second-order Kalman filter variables')
                 c.init_kf_with_velocity(dt)
 
             # Add this new object to all_contacts
@@ -143,14 +153,16 @@ class KalmanTracker:
             c.last_accessed = timestamp
 
         # Add to self.kalman_filter
+        rospy.loginfo('finished initializing...calling predict() and update()')
         c = self.all_contacts[contact_id]
         c.kf.predict()
         c.kf.update([c.info['x_pos'], c.info['y_pos']])
 
         # Remove items from the dictionary that have not been accessed in a while
-        for item in self.all_contacts:
-            if timestamp - item.last_accessed > MAX_TIME:
-                del self.all_contacts[item]
+        for contact_id in self.all_contacts:
+            cur_contact = self.all_contacts[contact_id]
+            if int(timestamp.second / 60) - int(cur_contact.last_accessed.second / 60) > MAX_TIME:
+                del self.all_contacts[cur_contact]
 
 
     def run(self):

@@ -4,6 +4,7 @@
 
 import rospy
 import sys
+import random
 
 from marine_msgs.msg import Detect
 
@@ -16,10 +17,13 @@ class Dummy():
 
         while not rospy.is_shutdown():
             msg = Detect()
-            #msg.header = 'this is my cool header so hands off!'
-            #msg.header = Detect.header
- 
-            #rospy.loginfo(msg.header)
+
+            msg.p.pose.pose.position.x = float(random.randrange(0, 1000, 1))
+            msg.p.pose.pose.position.y = float(random.randrange(0, 1000, 1))
+            msg.t.twist.twist.linear.x = 1.0
+            msg.t.twist.twist.linear.y = 1.0
+            
+            rospy.loginfo(msg)
             self.pub.publish(msg)
             rospy.loginfo('data published!')
             r.sleep()

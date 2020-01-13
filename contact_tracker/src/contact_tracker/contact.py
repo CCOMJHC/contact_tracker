@@ -13,6 +13,7 @@ import numpy as np
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
+from filterpy.common import Q_discrete_white_noise 
 
 dt = 1
 V = 0.1
@@ -67,34 +68,28 @@ class Contact:
         """
 
         # Define the state variable vector
-        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']])
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]).T
 
         # Define the state covariance matrix
-        self.kf.P = np.array([self.info['pos_covar'][0], 0, 0, 0,
-                             0, self.info['pos_covar'][7], 0 , 0,
-                             0, 0, self.info['twist_covar'][0], 0,
-                             0, 0, 0, self.info['twist_covar'][7]
-                             ])
+        self.kf.P = np.array([[self.info['pos_covar'][0], 0, 0, 0],
+                             [0, self.info['pos_covar'][7], 0 , 0],
+                             [0, 0, self.info['twist_covar'][0], 0],
+                             [0, 0, 0, self.info['twist_covar'][7]]])
 
         # Define the noise covariance (TBD)
-        self.kf.Q = 0
+        self.kf.Q = Q_discrete_white_noise(dim=4, dt=dt, var=0.04**2) 
 
         # Define the process model matrix
-        fu = np.array([1, 0, dt, 0,
-                      0, 1, 0, dt,
-                      0, 0, 1, 0,
-                      0, 0, 0, 1])
-        self.kf.F = self.kf.x.dot(fu)
+        self.kf.F = np.array([[1, 0, dt, 0],
+                              [0, 1, 0, dt],
+                              [0, 0, 1, 0],
+                              [0, 0, 0, 1]])
 
         # Define the measurement function
-        self.kf.H = np.array([1, 0, 0, 0,
-                             0, 1, 0, 0,
-                             0, 0, 1, 0,
-                             0, 0, 0, 1])
+        self.kf.H = np.array([[1, 0, 0, 0],
+                              [0, 1, 0, 0]])
 
         # Define the measurement covariance
         # Initially we estimate the value of V, i.e., the variance in our measurement I think?
-        self.kf.R = np.array([V, 0, 0, 0,
-                             0, V, 0, 0,
-                             0, 0, V, 0,
-                             0, 0, 0, V])
+        self.kf.R = np.array([[V, 0],
+                              [0, V]])
