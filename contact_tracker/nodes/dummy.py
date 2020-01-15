@@ -4,7 +4,7 @@
 
 import rospy
 import sys
-import random
+from numpy.random import randn
 
 from marine_msgs.msg import Detect
 
@@ -17,18 +17,21 @@ class Dummy():
 
         x_pos = 0
         y_pos = 0
+        test_second_order = False
+
         while x_pos < 300:
             msg = Detect()
 
-            msg.p.pose.pose.position.x = x_pos
-            msg.p.pose.pose.position.y = y_pos
-            msg.t.twist.twist.linear.x = 1.0
-            msg.t.twist.twist.linear.y = 1.0
+            msg.p.pose.pose.position.x = x_pos + randn() * 10
+            msg.p.pose.pose.position.y = y_pos + randn() * 10
+            
+            if test_second_order:    
+                msg.t.twist.twist.linear.x = 1.0
+                msg.t.twist.twist.linear.y = 1.0
             
             x_pos += 1
             y_pos += 1
 
-            #rospy.loginfo(msg)
             self.pub.publish(msg)
             r.sleep()
 

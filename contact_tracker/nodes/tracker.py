@@ -23,7 +23,7 @@ from filterpy.kalman import predict
 
 
 # TODO: Move these to a config file
-MAX_TIME = 50.00
+MAX_TIME = 60.00
 INITIAL_VELOCITY = 5**2
 dt = 1
 DEBUG = True
@@ -41,18 +41,6 @@ class KalmanTracker:
         self.all_contacts = {}
 
 
-    def detect_not_already_contact(self, all_contacts, hash_key):
-        """
-        Returns true if this contact is already in the dictionary,
-        false otherwise.
-        """
-
-        if hash_key in all_contacts:
-            return True 
-
-        return False 
-
-
     def plot_results(self):
         """
         Visualize results of the Kalman filter.
@@ -63,6 +51,7 @@ class KalmanTracker:
         m_ys = []
         p_xs = []
         p_ys = []
+
         for i in c.zs:
             m_xs.append(i[0])
             m_ys.append(i[1])
@@ -70,7 +59,7 @@ class KalmanTracker:
             p_xs.append(i[0])
             p_ys.append(i[1])
 
-        plt.plot(m_xs, m_ys, linestyle='-', label='measurements')
+        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements')
         plt.plot(p_xs, p_ys, linestyle='--', label='predictions')
         plt.legend()
         plt.xlabel('iteration')
@@ -153,18 +142,18 @@ class KalmanTracker:
             # If there was no velocity, the state vector will only have two values.
             kf = None
             if detect_info['x_vel'] == 0:
-                rospy.loginfo('instantiating first-order Kalman filter')
-                kf = KalmanFilter(dim_x=2, dim_z=1)
+                rospy.loginfo('Instantiating first-order Kalman filter')
+                kf = KalmanFilter(dim_x=4, dim_z=2)
             else:
-                rospy.loginfo('instantiating second-order Kalman filter')
+                rospy.loginfo('Instantiating second-order Kalman filter')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
 
             c = contact_tracker.contact.Contact(detect_info, kf, timestamp, contact_id)
             if kf.dim_x == 2:
-                rospy.loginfo('initializing first-order Kalman filter variables')
+                rospy.loginfo('Initializing first-order Kalman filter variables')
                 c.init_kf(dt)
             else:
-                rospy.loginfo('initiaizing second-order Kalman filter variables')
+                rospy.loginfo('Initiaizing second-order Kalman filter variables')
                 c.init_kf_with_velocity(dt)
 
             # Add this new object to all_contacts
@@ -178,7 +167,7 @@ class KalmanTracker:
             c.info = detect_info
 
         # Add to self.kalman_filter
-        rospy.loginfo('calling predict() and update()')
+        rospy.loginfo('Calling predict() and update()')
         c = self.all_contacts[contact_id]
         c.kf.predict()
         c.kf.update((c.info['x_pos'], c.info['y_pos']))
@@ -186,10 +175,6 @@ class KalmanTracker:
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.kf.x)
         c.zs.append(c.kf.z)
-
-        '''if DEBUG:
-            rospy.loginfo(c.kf.x)
-            rospy.loginfo(c.kf.z)'''
 
         # Remove items from the dictionary that have not been accessed in a while
         '''for contact_id in self.all_contacts:
@@ -220,5 +205,5 @@ if __name__=='__main__':
         kt.run()
 
     except rospy.ROSInterruptException:
-        print('Falied to initialize KalmanTracker')
+        rospy.loginfo('Falied to initialize KalmanTracker')
         pass

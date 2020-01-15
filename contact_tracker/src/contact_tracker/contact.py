@@ -55,12 +55,10 @@ class Contact:
                               [0, 1]])
 
         # Define the measurement function
-        self.kf.H = np.array([1, 0],
-                             [0, 1])
+        self.kf.H = np.array([1, 0])
 
-        # Define the measurement covariance
-        self.kf.R = np.array([V, 0],
-                             [0, V])
+        # Define the measurement covariance (TBD)
+        self.kf.R = np.array([0])
 
 
     def init_kf_with_velocity(self, dt):
@@ -73,9 +71,9 @@ class Contact:
 
         # Define the state covariance matrix
         self.kf.P = np.array([[self.info['pos_covar'][0], 0, 0, 0],
-                             [0, self.info['pos_covar'][7], 0 , 0],
-                             [0, 0, self.info['twist_covar'][0], 0],
-                             [0, 0, 0, self.info['twist_covar'][7]]])
+                              [0, self.info['pos_covar'][7], 0 , 0],
+                              [0, 0, self.info['twist_covar'][0], 0],
+                              [0, 0, 0, self.info['twist_covar'][7]]])
 
         # Define the noise covariance (TBD)
         self.kf.Q = Q_discrete_white_noise(dim=4, dt=dt, var=0.04**2) 
