@@ -25,6 +25,13 @@ class Contact:
     def __init__(self, detect_info, kf, timestamp, contact_id):
         """
         Define the constructor.
+        
+        detect_info -- dictionary containing data from the Detect message being used to create this Contact
+        kf -- unique KalmanFilter object for this specific Contact object
+        timestamp -- indication of when this Contact was last accessed
+        contact_id -- unique id for this Contact object for easy lookup in KalmanTracker's all_contacts dictionary
+        xs -- list of tuples containing values for the predictions
+        zs -- list of tuples containing values for the measurements
         """
 
         self.info = detect_info
@@ -38,6 +45,9 @@ class Contact:
     def init_kf(self, dt):
         """
         Initialize the kalman filter for this contact without values for velocity.
+
+        Keyword arguments:
+        dt -- time step for the KalmanFilter
         """
 
         # Define the state variable vector
@@ -64,6 +74,9 @@ class Contact:
     def init_kf_with_velocity(self, dt):
         """
         Initialize the kalman filter including velocity values for this contact.
+        
+        Keyword arguments:
+        dt -- time step for the KalmanFilter
         """
 
         # Define the state variable vector

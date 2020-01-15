@@ -33,20 +33,27 @@ class KalmanTracker:
     """
 
 
-    def __init__(self):
+    def __init__(self, max_time, dt, initial_velocity):
         """
         Define the constructor.
+
+        max_time -- amount of time that must ellapse before an item is deleted from all_contacts
+        dt -- time step for the Kalman filters
+        initial_velocity -- velocity at the start of the program
         """
+
         self.all_contacts = {}
-        self.max_time = 60.0
-        self.dt = 1.0
-        self.initial_velocity = 1.0
+        self.max_time = max_time 
+        self.dt = dt 
+        self.initial_velocity = initial_velocity 
 
 
     def plot_results(self):
         """
-        Visualize results of the Kalman filter.
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
         """
+
         c = self.all_contacts[1]
         
         m_xs = []
@@ -73,8 +80,10 @@ class KalmanTracker:
 
     def reconfigure_callback(self, config, level):
         """
-        Get the parameters from the cfg file.
+        Get the parameters from the cfg file and assign them to the member variables of the 
+        KalmanTracker class.
         """
+
         self.dt = config['dt']
         self.max_time = config['max_time']
         self.initial_velocity = config['initial_velocity']
@@ -84,6 +93,9 @@ class KalmanTracker:
     def callback(self, data):
         """
         Listen for detects and add to dictionary and filter if not already there.
+
+        Keyword arguments:
+        data -- the Detect message transmitted
         """
         
         ####################################
@@ -203,7 +215,6 @@ class KalmanTracker:
         rospy.init_node('tracker', anonymous=True)
         srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
-        #srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.spin()
 
         if DEBUG:
@@ -215,7 +226,7 @@ class KalmanTracker:
 if __name__=='__main__':
 
     try:
-        kt = KalmanTracker()
+        kt = KalmanTracker(60.0, 1.0, 1.0)
         kt.run()
 
     except rospy.ROSInterruptException:
