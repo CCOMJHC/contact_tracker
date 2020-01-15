@@ -17,6 +17,7 @@ class Dummy():
 
         x_pos = 0
         y_pos = 0
+        d = rospy.Duration(1)
         test_second_order = True
 
         while x_pos < 300:
@@ -33,7 +34,7 @@ class Dummy():
             y_pos += 1
 
             self.pub.publish(msg)
-            r.sleep()
+            rospy.sleep(d)
 
 
 if __name__=='__main__':
