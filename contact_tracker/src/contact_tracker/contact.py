@@ -31,6 +31,8 @@ class Contact:
         self.kf = kf
         self.last_accessed = timestamp
         self.id = contact_id
+        self.xs = []
+        self.zs = []
 
 
     def init_kf(self, dt):
@@ -39,27 +41,26 @@ class Contact:
         """
 
         # Define the state variable vector
-        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']])
+        self.kf.x = np.array([self.info['x_pos'], self.info['y_pos']]).T
 
         # Define the state covariance matrix
         self.kf.P = np.array([[self.info['pos_covar'][0], 0],
-                             [0, self.info['pos_covar'][7]]])
+                              [0, self.info['pos_covar'][7]]])
 
         # Define the noise covariance (TBD)
-        self.kf.Q = 0
+        self.kf.Q = Q_discrete_white_noise(dim=2, dt=dt, var=0.04**2)
 
         # Define the process model matrix
-        fu = np.array([[1, dt],
-                      [0, 1]])
-        self.kf.F = fu.dot(self.kf.x)
+        self.kf.F = np.array([[1, dt],
+                              [0, 1]])
 
         # Define the measurement function
-        self.kf.H = np.array([1, 0,
-                             0, 1])
+        self.kf.H = np.array([1, 0],
+                             [0, 1])
 
         # Define the measurement covariance
-        self.kf.R = np.array([V, 0,
-                             0, V])
+        self.kf.R = np.array([V, 0],
+                             [0, V])
 
 
     def init_kf_with_velocity(self, dt):

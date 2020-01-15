@@ -15,17 +15,21 @@ class Dummy():
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         r = rospy.Rate(50)
 
-        while not rospy.is_shutdown():
+        x_pos = 0
+        y_pos = 0
+        while x_pos < 300:
             msg = Detect()
 
-            msg.p.pose.pose.position.x = float(random.randrange(0, 1000, 1))
-            msg.p.pose.pose.position.y = float(random.randrange(0, 1000, 1))
+            msg.p.pose.pose.position.x = x_pos
+            msg.p.pose.pose.position.y = y_pos
             msg.t.twist.twist.linear.x = 1.0
             msg.t.twist.twist.linear.y = 1.0
             
-            rospy.loginfo(msg)
+            x_pos += 1
+            y_pos += 1
+
+            #rospy.loginfo(msg)
             self.pub.publish(msg)
-            rospy.loginfo('data published!')
             r.sleep()
 
 

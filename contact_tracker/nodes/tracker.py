@@ -12,6 +12,7 @@ import time
 import rospy
 import datetime
 import numpy as np
+import matplotlib.pyplot as plt
 
 import contact_tracker.contact
 from marine_msgs.msg import Detect
@@ -52,6 +53,33 @@ class KalmanTracker:
         return False 
 
 
+    def plot_results(self):
+        """
+        Visualize results of the Kalman filter.
+        """
+        c = self.all_contacts[1]
+        
+        m_xs = []
+        m_ys = []
+        p_xs = []
+        p_ys = []
+        for i in c.zs:
+            m_xs.append(i[0])
+            m_ys.append(i[1])
+        for i in c.xs:
+            p_xs.append(i[0])
+            p_ys.append(i[1])
+
+        plt.plot(m_xs, m_ys, linestyle='-', label='measurements')
+        plt.plot(p_xs, p_ys, linestyle='--', label='predictions')
+        plt.legend()
+        plt.xlabel('iteration')
+        plt.ylabel('position')
+        plt.xlim(c.xs[0][0], 300)
+        plt.ylim(c.xs[0][0], 300)
+        plt.show()
+
+
     def callback(self, data):
         """
         Listen for detects and add to dictionary and filter if not already there.
@@ -60,10 +88,6 @@ class KalmanTracker:
         ####################################
         ####### INITIALIZE VARIABLES #######
         ####################################
-
-        if DEBUG:
-            rospy.loginfo('initializing variables for new detect message:')
-            rospy.loginfo(data.p)
 
         # Get necessary info from the Detect data
         detect_info = {
@@ -85,27 +109,24 @@ class KalmanTracker:
                 'z_vel': 0
                 }
 
-        if DEBUG:
-            rospy.loginfo('checking for NaNs')
-
         # Assign values only if they are not NaNs
         if data.p.pose.pose.position.x != 'NaN':
-            detect_info['x_pos'] = data.p.pose.pose.position.x
+            detect_info['x_pos'] = float(data.p.pose.pose.position.x)
 
         if data.p.pose.pose.position.y != 'NaN':
-            detect_info['y_pos'] = data.p.pose.pose.position.y
+            detect_info['y_pos'] = float(data.p.pose.pose.position.y)
 
         if data.p.pose.pose.position.z != 'NaN':
-            detect_info['z_pos'] = data.p.pose.pose.position.z
+            detect_info['z_pos'] = float(data.p.pose.pose.position.z)
 
         if data.t.twist.twist.linear.x != 'NaN':
-            detect_info['x_vel'] = data.t.twist.twist.linear.x
+            detect_info['x_vel'] = float(data.t.twist.twist.linear.x)
 
         if data.t.twist.twist.linear.y != 'NaN':
-            detect_info['y_vel'] = data.t.twist.twist.linear.y
+            detect_info['y_vel'] = float(data.t.twist.twist.linear.y)
 
         if data.t.twist.twist.linear.z != 'NaN':
-            detect_info['z_vel'] = data.t.twist.twist.linear.z
+            detect_info['z_vel'] = float(data.t.twist.twist.linear.z)
 
 
         # Check to see that if one coordinate is not NaN, neither is the other
@@ -114,8 +135,11 @@ class KalmanTracker:
             # TODO: figure out what to do in these cases?
         if ((detect_info['x_vel'] != 0 and detect_info['y_vel'] == 0) or (detect_info['x_vel'] == 0 and detect_info['y_vel'] != 0)):
            pass
-
-        contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
+        
+        if DEBUG:
+            contact_id = 1
+        else:    
+            contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
         timestamp = datetime.datetime.now()
 
 
@@ -130,7 +154,7 @@ class KalmanTracker:
             kf = None
             if detect_info['x_vel'] == 0:
                 rospy.loginfo('instantiating first-order Kalman filter')
-                kf = KalmanFilter(dim_x=2, dim_z=2)
+                kf = KalmanFilter(dim_x=2, dim_z=1)
             else:
                 rospy.loginfo('instantiating second-order Kalman filter')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
@@ -151,18 +175,27 @@ class KalmanTracker:
             # to remove it anytime soon.
             c = self.all_contacts[contact_id]
             c.last_accessed = timestamp
+            c.info = detect_info
 
         # Add to self.kalman_filter
-        rospy.loginfo('finished initializing...calling predict() and update()')
+        rospy.loginfo('calling predict() and update()')
         c = self.all_contacts[contact_id]
         c.kf.predict()
-        c.kf.update([c.info['x_pos'], c.info['y_pos']])
+        c.kf.update((c.info['x_pos'], c.info['y_pos']))
+        
+        # Append appropriate prior and measurements to lists here
+        c.xs.append(c.kf.x)
+        c.zs.append(c.kf.z)
+
+        '''if DEBUG:
+            rospy.loginfo(c.kf.x)
+            rospy.loginfo(c.kf.z)'''
 
         # Remove items from the dictionary that have not been accessed in a while
-        for contact_id in self.all_contacts:
+        '''for contact_id in self.all_contacts:
             cur_contact = self.all_contacts[contact_id]
             if int(timestamp.second / 60) - int(cur_contact.last_accessed.second / 60) > MAX_TIME:
-                del self.all_contacts[cur_contact]
+                del self.all_contacts[cur_contact]'''
 
 
     def run(self):
@@ -173,6 +206,11 @@ class KalmanTracker:
         rospy.init_node('tracker', anonymous=True)
         rospy.Subscriber('/detects', Detect, self.callback)
         rospy.spin()
+
+        if DEBUG:
+            rospy.loginfo('plotting the results')
+            rospy.loginfo(self.all_contacts[1].xs[0])
+            self.plot_results()
 
 
 if __name__=='__main__':
