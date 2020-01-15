@@ -5,7 +5,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Date last modified: 01/07/2020
+# Date last modified: 01/15/2020
 
 import math
 import time
@@ -21,12 +21,11 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 
+from dynamic_reconfigure.server import Server
+from contact_tracker.cfg import contact_trackerConfig
 
-# TODO: Move these to a config file
-MAX_TIME = 60.00
-INITIAL_VELOCITY = 5**2
-dt = 1
 DEBUG = True
+
 
 class KalmanTracker:
     """
@@ -39,6 +38,9 @@ class KalmanTracker:
         Define the constructor.
         """
         self.all_contacts = {}
+        self.max_time = 60.0
+        self.dt = 1.0
+        self.initial_velocity = 1.0
 
 
     def plot_results(self):
@@ -59,14 +61,24 @@ class KalmanTracker:
             p_xs.append(i[0])
             p_ys.append(i[1])
 
-        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements')
-        plt.plot(p_xs, p_ys, linestyle='--', label='predictions')
+        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='g')
+        plt.plot(p_xs, p_ys, label='predictions', color='b')
         plt.legend()
         plt.xlabel('iteration')
         plt.ylabel('position')
         plt.xlim(c.xs[0][0], 300)
         plt.ylim(c.xs[0][0], 300)
         plt.show()
+
+
+    def reconfigure_callback(self, config, level):
+        """
+        Get the parameters from the cfg file.
+        """
+        self.dt = config['dt']
+        self.max_time = config['max_time']
+        self.initial_velocity = config['initial_velocity']
+        return config
 
 
     def callback(self, data):
@@ -151,10 +163,10 @@ class KalmanTracker:
             c = contact_tracker.contact.Contact(detect_info, kf, timestamp, contact_id)
             if kf.dim_x == 2:
                 rospy.loginfo('Initializing first-order Kalman filter variables')
-                c.init_kf(dt)
+                c.init_kf(self.dt)
             else:
                 rospy.loginfo('Initiaizing second-order Kalman filter variables')
-                c.init_kf_with_velocity(dt)
+                c.init_kf_with_velocity(self.dt)
 
             # Add this new object to all_contacts
             self.all_contacts[contact_id] = c
@@ -189,7 +201,9 @@ class KalmanTracker:
         """
 
         rospy.init_node('tracker', anonymous=True)
+        srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
+        #srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.spin()
 
         if DEBUG:

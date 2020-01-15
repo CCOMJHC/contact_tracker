@@ -17,7 +17,7 @@ class Dummy():
 
         x_pos = 0
         y_pos = 0
-        test_second_order = False
+        test_second_order = True
 
         while x_pos < 300:
             msg = Detect()
