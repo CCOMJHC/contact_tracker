@@ -20,6 +20,7 @@ from marine_msgs.msg import Detect
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
+from filterpy.common import Q_discrete_white_noise
 
 from dynamic_reconfigure.server import Server
 from contact_tracker.cfg import contact_trackerConfig
@@ -33,7 +34,7 @@ class KalmanTracker:
     """
 
 
-    def __init__(self, max_time, dt, initial_velocity):
+    def __init__(self):
         """
         Define the constructor.
 
@@ -43,9 +44,6 @@ class KalmanTracker:
         """
 
         self.all_contacts = {}
-        self.max_time = max_time 
-        self.dt = dt 
-        self.initial_velocity = initial_velocity 
 
 
     def plot_results(self):
@@ -61,14 +59,19 @@ class KalmanTracker:
         p_xs = []
         p_ys = []
 
+        print('PRINTING MEASUREMENTS')
         for i in c.zs:
+            print(i)
             m_xs.append(i[0])
             m_ys.append(i[1])
+        
+        print('PRINTING PREDICTIONS')
         for i in c.xs:
+            print(i)
             p_xs.append(i[0])
             p_ys.append(i[1])
 
-        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='g')
+        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='y')
         plt.plot(p_xs, p_ys, label='predictions', color='b')
         plt.legend()
         plt.xlabel('iteration')
@@ -84,7 +87,7 @@ class KalmanTracker:
         KalmanTracker class.
         """
 
-        self.dt = config['dt']
+        self.qhat = config['qhat']
         self.max_time = config['max_time']
         self.initial_velocity = config['initial_velocity']
         return config
@@ -175,18 +178,22 @@ class KalmanTracker:
             c = contact_tracker.contact.Contact(detect_info, kf, timestamp, contact_id)
             if kf.dim_x == 2:
                 rospy.loginfo('Initializing first-order Kalman filter variables')
-                c.init_kf(self.dt)
+                c.init_kf()
             else:
                 rospy.loginfo('Initiaizing second-order Kalman filter variables')
-                c.init_kf_with_velocity(self.dt)
+                c.init_kf_with_velocity()
 
             # Add this new object to all_contacts
             self.all_contacts[contact_id] = c
 
         else:
-            # Update the time stamp for when this contact was last accessed so we know not
-            # to remove it anytime soon.
+            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q.
+            # Then update the time stamp for when this contact was last accessed so we know not
+            # to remove it anytime soon. 
             c = self.all_contacts[contact_id]
+            epoch = (timestamp - c.last_accessed).total_seconds()
+            rospy.loginfo(self.qhat)
+            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var = 0.04**2)
             c.last_accessed = timestamp
             c.info = detect_info
 
@@ -219,14 +226,13 @@ class KalmanTracker:
 
         if DEBUG:
             rospy.loginfo('plotting the results')
-            rospy.loginfo(self.all_contacts[1].xs[0])
             self.plot_results()
 
 
 if __name__=='__main__':
 
     try:
-        kt = KalmanTracker(60.0, 1.0, 1.0)
+        kt = KalmanTracker()
         kt.run()
 
     except rospy.ROSInterruptException:
