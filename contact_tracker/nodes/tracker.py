@@ -111,6 +111,16 @@ class KalmanTracker:
         plt.ylim(c.xs[0][0], 300)
         plt.show()
 
+    
+    def dump(self, detect_info):
+        """
+        Print the contents of a contact's detect_info dictionary for debugging purposes.
+        """
+        
+        print('+++++++ CONTACTS +++++++')
+        for k, v in detect_info.items():
+            print(k, v)
+
 
     def reconfigure_callback(self, config, level):
         """
@@ -121,6 +131,7 @@ class KalmanTracker:
         self.qhat = config['qhat']
         self.max_time = config['max_time']
         self.initial_velocity = config['initial_velocity']
+        self.variance = config['variance']
         return config
 
 
@@ -157,27 +168,27 @@ class KalmanTracker:
                 }
 
         # Assign values only if they are not NaNs
-        if data.p.pose.pose.position.x != 'NaN':
+        if data.p.pose.pose.position.x != float('nan'):
             detect_info['x_pos'] = float(data.p.pose.pose.position.x)
 
-        if data.p.pose.pose.position.y != 'NaN':
+        if data.p.pose.pose.position.y != float('nan'):
             detect_info['y_pos'] = float(data.p.pose.pose.position.y)
 
-        if data.p.pose.pose.position.z != 'NaN':
+        if data.p.pose.pose.position.z != float('nan'):
             detect_info['z_pos'] = float(data.p.pose.pose.position.z)
 
-        if data.t.twist.twist.linear.x != 'NaN':
+        if data.t.twist.twist.linear.x != float('nan'):
             detect_info['x_vel'] = float(data.t.twist.twist.linear.x)
 
-        if data.t.twist.twist.linear.y != 'NaN':
+        if data.t.twist.twist.linear.y != float('nan'):
             detect_info['y_vel'] = float(data.t.twist.twist.linear.y)
 
-        if data.t.twist.twist.linear.z != 'NaN':
+        if data.t.twist.twist.linear.z != float('nan'):
             detect_info['z_vel'] = float(data.t.twist.twist.linear.z)
 
 
         # Check to see that if one coordinate is not NaN, neither is the other
-        if ((detect_info['x_pos'] != float('nan') and detect_info['y_pos'] == float('nan')) or (detect_info['x_pos'] == float('nan') and detect_info['y_pos'] != float('nan'))):
+        if ((detect_info['x_pos'] != float('nan') and detect_info['y_pos'] == float('nan')) or (detect_info['x_pos'] == 'nan' and detect_info['y_pos'] != 'nan')):
            return 
         if ((detect_info['x_vel'] != float('nan') and detect_info['y_vel'] == float('nan')) or (detect_info['x_vel'] == float('nan') and detect_info['y_vel'] != float('nan'))):
            return 
@@ -200,25 +211,25 @@ class KalmanTracker:
             c = None
             start_time = time.time()
             
-            if detect_info['x_pos'] != float('nan') and detect_info['x_vel'] == float('nan'):
+            if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
-                c.init_kf_without_velocity()
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c.init_kf_with_position_only()
             
-            elif detect_info['x_pos'] == float('nan') and detect_info['x_vel'] != float('nan'):
+            elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity but without position')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
-                c.init_kf_with_velocity()
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c.init_kf_with_velocity_only()
             
-            '''elif detect_info['x_pos'] != math.nan and detect_info['x_vel'] != math.nan and detect_info['x_acc'] == math.nan:
+            elif math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
-                c.init_kf()
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c.init_kf_with_position_and_velocity()
             
-            elif detect_info['x_acc'] != math.nan:
+            ''' elif math.isnan(detect_info['x_acc']):
                 rospy.loginfo('Instantiating second-order Kalman filter')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
                 c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
@@ -237,6 +248,7 @@ class KalmanTracker:
             c.dt = epoch
             c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var = 0.04**2) #TODO: Figure out what the variance should be here.
             c.info = detect_info
+            rospy.loginfo(self.qhat)
 
         # Add to self.kalman_filter
         rospy.loginfo('Calling predict() and update()')

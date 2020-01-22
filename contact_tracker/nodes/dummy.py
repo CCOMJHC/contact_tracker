@@ -28,6 +28,9 @@ class Dummy():
             if test_with_velocity:    
                 msg.t.twist.twist.linear.x = 1.0
                 msg.t.twist.twist.linear.y = 1.0
+            else: 
+                msg.t.twist.twist.linear.x = float('nan') 
+                msg.t.twist.twist.linear.y = float('nan')
             
             x_pos += 1
             y_pos += 1
