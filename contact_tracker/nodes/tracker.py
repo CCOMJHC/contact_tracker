@@ -46,7 +46,7 @@ class KalmanTracker:
         self.all_contacts = {}
 
 
-    def plot_results(self):
+    def plot_x_vs_y(self):
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
@@ -74,9 +74,40 @@ class KalmanTracker:
         plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='y')
         plt.plot(p_xs, p_ys, label='predictions', color='b')
         plt.legend()
-        plt.xlabel('iteration')
-        plt.ylabel('position')
+        plt.xlabel('x position')
+        plt.ylabel('y position')
         plt.xlim(c.xs[0][0], 300)
+        plt.ylim(c.xs[0][0], 300)
+        plt.show()
+
+
+    def plot_x_vs_time(self):
+        """
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
+        """
+
+        c = self.all_contacts[1]
+        
+        m_xs = []
+        p_xs = []
+
+        for i in c.zs:
+            m_xs.append(i[0])
+        
+        for i in c.xs:
+            p_xs.append(i[0])
+ 
+        print('PRINTING TIMES')
+        for i in c.times:
+            print(i)
+
+
+        plt.scatter(c.times, m_xs, linestyle='-', label='measurements', color='y')
+        plt.plot(c.times, p_xs, label='predictions', color='b')
+        plt.legend()
+        plt.xlabel('time')
+        plt.ylabel('x position')
         plt.ylim(c.xs[0][0], 300)
         plt.show()
 
@@ -117,12 +148,12 @@ class KalmanTracker:
                 'twist_frame_id': data.t.header.frame_id,
                 'pos_covar': data.p.pose.covariance,
                 'twist_covar': data.t.twist.covariance,
-                'x_pos': 0,
-                'x_vel': 0,
-                'y_pos': 0,
-                'y_vel': 0,
-                'z_pos': 0,
-                'z_vel': 0
+                'x_pos': float('nan'),
+                'x_vel': float('nan'),
+                'y_pos': float('nan'),
+                'y_vel': float('nan'),
+                'z_pos': float('nan'),
+                'z_vel': float('nan')
                 }
 
         # Assign values only if they are not NaNs
@@ -146,17 +177,15 @@ class KalmanTracker:
 
 
         # Check to see that if one coordinate is not NaN, neither is the other
-        if ((detect_info['x_pos'] != 0 and detect_info['y_pos'] == 0) or (detect_info['x_pos'] == 0 and detect_info['y_pos'] != 0)):
-           pass
-            # TODO: figure out what to do in these cases?
-        if ((detect_info['x_vel'] != 0 and detect_info['y_vel'] == 0) or (detect_info['x_vel'] == 0 and detect_info['y_vel'] != 0)):
-           pass
+        if ((detect_info['x_pos'] != float('nan') and detect_info['y_pos'] == float('nan')) or (detect_info['x_pos'] == float('nan') and detect_info['y_pos'] != float('nan'))):
+           return 
+        if ((detect_info['x_vel'] != float('nan') and detect_info['y_vel'] == float('nan')) or (detect_info['x_vel'] == float('nan') and detect_info['y_vel'] != float('nan'))):
+           return 
         
         if DEBUG:
             contact_id = 1
         else:    
             contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
-        timestamp = datetime.datetime.now()
 
 
         #######################################################
@@ -164,24 +193,36 @@ class KalmanTracker:
         #######################################################
 
         # Create new contact object.
+        epoch = 0
         if not contact_id in self.all_contacts:
           
-            # If there was no velocity, the state vector will only have two values.
             kf = None
-            if detect_info['x_vel'] == 0:
-                rospy.loginfo('Instantiating first-order Kalman filter')
+            c = None
+            start_time = time.time()
+            
+            if detect_info['x_pos'] != float('nan') and detect_info['x_vel'] == float('nan'):
+                rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-            else:
+                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
+                c.init_kf_without_velocity()
+            
+            elif detect_info['x_pos'] == float('nan') and detect_info['x_vel'] != float('nan'):
+                rospy.loginfo('Instantiating first-order Kalman filter with velocity but without position')
+                kf = KalmanFilter(dim_x=4, dim_z=2)
+                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
+                c.init_kf_with_velocity()
+            
+            '''elif detect_info['x_pos'] != math.nan and detect_info['x_vel'] != math.nan and detect_info['x_acc'] == math.nan:
+                rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
+                kf = KalmanFilter(dim_x=4, dim_z=2)
+                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
+                c.init_kf()
+            
+            elif detect_info['x_acc'] != math.nan:
                 rospy.loginfo('Instantiating second-order Kalman filter')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-
-            c = contact_tracker.contact.Contact(detect_info, kf, timestamp, contact_id)
-            if kf.dim_x == 2:
-                rospy.loginfo('Initializing first-order Kalman filter variables')
-                c.init_kf()
-            else:
-                rospy.loginfo('Initiaizing second-order Kalman filter variables')
-                c.init_kf_with_velocity()
+                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
+                c.init_kf_with_acceleration()'''
 
             # Add this new object to all_contacts
             self.all_contacts[contact_id] = c
@@ -191,10 +232,10 @@ class KalmanTracker:
             # Then update the time stamp for when this contact was last accessed so we know not
             # to remove it anytime soon. 
             c = self.all_contacts[contact_id]
-            epoch = (timestamp - c.last_accessed).total_seconds()
-            rospy.loginfo(self.qhat)
-            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var = 0.04**2)
-            c.last_accessed = timestamp
+            c.last_accessed = time.time()
+            epoch = c.last_accessed - c.first_accessed
+            c.dt = epoch
+            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var = 0.04**2) #TODO: Figure out what the variance should be here.
             c.info = detect_info
 
         # Add to self.kalman_filter
@@ -206,6 +247,7 @@ class KalmanTracker:
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.kf.x)
         c.zs.append(c.kf.z)
+        c.times.append(epoch)
 
         # Remove items from the dictionary that have not been accessed in a while
         '''for contact_id in self.all_contacts:
@@ -226,7 +268,8 @@ class KalmanTracker:
 
         if DEBUG:
             rospy.loginfo('plotting the results')
-            self.plot_results()
+            #self.plot_x_vs_y()
+            self.plot_x_vs_time()
 
 
 if __name__=='__main__':
