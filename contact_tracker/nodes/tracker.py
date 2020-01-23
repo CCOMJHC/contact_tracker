@@ -166,32 +166,42 @@ class KalmanTracker:
                 'z_pos': float('nan'),
                 'z_vel': float('nan')
                 }
+        
+        print(data)
 
         # Assign values only if they are not NaNs
-        if data.p.pose.pose.position.x != float('nan'):
+        if not math.isnan(data.p.pose.pose.position.x):
+            if DEBUG: print('x_pos not a nan')
             detect_info['x_pos'] = float(data.p.pose.pose.position.x)
 
-        if data.p.pose.pose.position.y != float('nan'):
+        if not math.isnan(data.p.pose.pose.position.y):
+            if DEBUG: print('y_pos not a nan')
             detect_info['y_pos'] = float(data.p.pose.pose.position.y)
 
-        if data.p.pose.pose.position.z != float('nan'):
+        if not math.isnan(data.p.pose.pose.position.z):
+            if DEBUG: print('z_pos not a nan')
             detect_info['z_pos'] = float(data.p.pose.pose.position.z)
 
-        if data.t.twist.twist.linear.x != float('nan'):
+        if not math.isnan(data.t.twist.twist.linear.x):
+            if DEBUG: print('x_vel not a nan')
             detect_info['x_vel'] = float(data.t.twist.twist.linear.x)
 
-        if data.t.twist.twist.linear.y != float('nan'):
+        if not math.isnan(data.t.twist.twist.linear.y):
+            if DEBUG: print('y_vel not a nan')
             detect_info['y_vel'] = float(data.t.twist.twist.linear.y)
 
-        if data.t.twist.twist.linear.z != float('nan'):
+        if not math.isnan(data.t.twist.twist.linear.z):
+            if DEBUG: print('z_vel not a nan')
             detect_info['z_vel'] = float(data.t.twist.twist.linear.z)
 
 
         # Check to see that if one coordinate is not NaN, neither is the other
-        if ((detect_info['x_pos'] != float('nan') and detect_info['y_pos'] == float('nan')) or (detect_info['x_pos'] == 'nan' and detect_info['y_pos'] != 'nan')):
-           return 
-        if ((detect_info['x_vel'] != float('nan') and detect_info['y_vel'] == float('nan')) or (detect_info['x_vel'] == float('nan') and detect_info['y_vel'] != float('nan'))):
-           return 
+        if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
+            if DEBUG: print('ERROR: x_pos and y_pos both were not nans...returning')
+            return 
+        if ((not math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])) or (math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel']))):
+            if DEBUG: print('ERROR: x_vel and y_vel both were not nans...returning')
+            return 
         
         if DEBUG:
             contact_id = 1
@@ -223,16 +233,16 @@ class KalmanTracker:
                 c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
                 c.init_kf_with_velocity_only()
             
-            elif math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
+            elif not math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
-                kf = KalmanFilter(dim_x=4, dim_z=2)
+                kf = KalmanFilter(dim_x=4, dim_z=4)
                 c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
                 c.init_kf_with_position_and_velocity()
             
-            ''' elif math.isnan(detect_info['x_acc']):
+            '''elif not math.isnan(detect_info['x_acc']):
                 rospy.loginfo('Instantiating second-order Kalman filter')
-                kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, start_time, contact_id)
+                kf = KalmanFilter(dim_x=6, dim_z=4)
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
                 c.init_kf_with_acceleration()'''
 
             # Add this new object to all_contacts
@@ -254,7 +264,10 @@ class KalmanTracker:
         rospy.loginfo('Calling predict() and update()')
         c = self.all_contacts[contact_id]
         c.kf.predict()
-        c.kf.update((c.info['x_pos'], c.info['y_pos']))
+        if c.kf.dim_z == 4:
+            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel']))
+        else:
+            c.kf.update((c.info['x_pos'], c.info['y_pos']))
         
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.kf.x)

@@ -22,12 +22,13 @@ class Contact:
     Class to create contact object with its own KalmanFilter.
     """
 
-    def __init__(self, detect_info, kf, V, timestamp, contact_id):
+    def __init__(self, detect_info, kf, variance, timestamp, contact_id):
         """
         Define the constructor.
         
         detect_info -- dictionary containing data from the Detect message being used to create this Contact
         kf -- unique KalmanFilter object for this specific Contact object
+        variance -- variance for the measurement
         timestamp -- indication of when this Contact was last accessed
         contact_id -- unique id for this Contact object for easy lookup in KalmanTracker's all_contacts dictionary
         xs -- list of tuples containing values for the predictions
@@ -36,7 +37,7 @@ class Contact:
 
         self.info = detect_info
         self.kf = kf
-        self.V = V
+        self.variance = variance 
         self.first_accessed = timestamp
         self.last_accessed = timestamp
         self.id = contact_id
@@ -48,10 +49,7 @@ class Contact:
 
     def init_kf_with_position_only(self):
         """
-        Initialize the kalman filter with only position values for this contact.
-        
-        Keyword arguments:
-        dt -- time step for the KalmanFilter
+        Initialize a first-order KalmanFilter given only values for position.
         """
 
         # Define the state variable vector
@@ -64,7 +62,7 @@ class Contact:
                               [0, 0, 0, 0]])
 
         # Define the noise covariance (TBD)
-        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=V) 
+        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
 
         # Define the process model matrix
         self.kf.F = np.array([[1, 0, self.dt, 0],
@@ -77,17 +75,13 @@ class Contact:
                               [0, 1, 0, 0]])
 
         # Define the measurement covariance
-        # Initially we estimate the value of V, i.e., the variance in our measurement I think?
-        self.kf.R = np.array([[V, 0],
-                              [0, V]])
+        self.kf.R = np.array([[self.variance, 0],
+                              [0, self.variance]])
 
 
     def init_kf_with_velocity_only(self):
         """
-        Initialize the kalman filter with only velocity values for this contact.
-        
-        Keyword arguments:
-        dt -- time step for the KalmanFilter
+        Initialize a first-oder KalmanFilter given only values for velocity.
         """
 
         # Define the state variable vector
@@ -100,9 +94,9 @@ class Contact:
                               [0, 0, 0, self.info['twist_covar'][7]]])
 
         # Define the noise covariance (TBD)
-        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=V) 
+        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
 
-        # Define the process model matrix
+        # Define the process model matrix 
         self.kf.F = np.array([[1, 0, self.dt, 0],
                               [0, 1, 0, self.dt],
                               [0, 0, 1, 0],
@@ -113,17 +107,13 @@ class Contact:
                               [0, 0, 0, 1]])
 
         # Define the measurement covariance
-        # Initially we estimate the value of V, i.e., the variance in our measurement I think?
-        self.kf.R = np.array([[V, 0],
-                              [0, V]])
+        self.kf.R = np.array([[self.variance, 0],
+                              [0, self.variance]])
 
 
     def init_kf_with_position_and_velocity(self):
         """
-        Initialize the kalman filter with only position values for this contact.
-        
-        Keyword arguments:
-        dt -- time step for the KalmanFilter
+        Initialize a first-order KalmanFilter given values for position and velocity.
         """
 
         # Define the state variable vector
@@ -136,7 +126,7 @@ class Contact:
                               [0, 0, 0, self.info['twist_covar'][7]]])
 
         # Define the noise covariance (TBD)
-        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=V) 
+        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
 
         # Define the process model matrix
         self.kf.F = np.array([[1, 0, self.dt, 0],
@@ -151,8 +141,9 @@ class Contact:
                               [0, 0, 0, 1]])
 
         # Define the measurement covariance
-        # Initially we estimate the value of V, i.e., the variance in our measurement I think?
-        self.kf.R = np.array([[V, 0],
-                              [0, V]])
+        self.kf.R = np.array([[self.variance, 0, 0, 0],
+                              [0, self.variance, 0, 0],
+                              [0, 0, self.variance, 0],
+                              [0, 0, 0, self.variance]])
 
 
