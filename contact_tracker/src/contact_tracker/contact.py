@@ -29,17 +29,20 @@ class Contact:
         detect_info -- dictionary containing data from the Detect message being used to create this Contact
         kf -- unique KalmanFilter object for this specific Contact object
         variance -- variance for the measurement
-        timestamp -- indication of when this Contact was last accessed
+        first_measured -- indication of when this Contact was first measured
+        last_measured -- indication of when this Contact was last measured 
         contact_id -- unique id for this Contact object for easy lookup in KalmanTracker's all_contacts dictionary
         xs -- list of tuples containing values for the predictions
         zs -- list of tuples containing values for the measurements
+        times -- list representing times that correspond to when each measurement was taken
+        dt -- initial timestep
         """
 
         self.info = detect_info
         self.kf = kf
         self.variance = variance 
-        self.first_accessed = timestamp
-        self.last_accessed = timestamp
+        self.first_measured = timestamp
+        self.last_measured = timestamp
         self.id = contact_id
         self.xs = []
         self.zs = []

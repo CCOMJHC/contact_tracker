@@ -129,7 +129,7 @@ class KalmanTracker:
         """
 
         self.qhat = config['qhat']
-        self.max_time = config['max_time']
+        self.max_stale_contact_time = config['max_stale_contact_time']
         self.initial_velocity = config['initial_velocity']
         self.variance = config['variance']
         return config
@@ -167,31 +167,23 @@ class KalmanTracker:
                 'z_vel': float('nan')
                 }
         
-        print(data)
-
         # Assign values only if they are not NaNs
         if not math.isnan(data.p.pose.pose.position.x):
-            if DEBUG: print('x_pos not a nan')
             detect_info['x_pos'] = float(data.p.pose.pose.position.x)
 
         if not math.isnan(data.p.pose.pose.position.y):
-            if DEBUG: print('y_pos not a nan')
             detect_info['y_pos'] = float(data.p.pose.pose.position.y)
 
         if not math.isnan(data.p.pose.pose.position.z):
-            if DEBUG: print('z_pos not a nan')
             detect_info['z_pos'] = float(data.p.pose.pose.position.z)
 
         if not math.isnan(data.t.twist.twist.linear.x):
-            if DEBUG: print('x_vel not a nan')
             detect_info['x_vel'] = float(data.t.twist.twist.linear.x)
 
         if not math.isnan(data.t.twist.twist.linear.y):
-            if DEBUG: print('y_vel not a nan')
             detect_info['y_vel'] = float(data.t.twist.twist.linear.y)
 
         if not math.isnan(data.t.twist.twist.linear.z):
-            if DEBUG: print('z_vel not a nan')
             detect_info['z_vel'] = float(data.t.twist.twist.linear.z)
 
 
@@ -219,30 +211,29 @@ class KalmanTracker:
           
             kf = None
             c = None
-            start_time = time.time()
             
             if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_position_only()
             
             elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity but without position')
                 kf = KalmanFilter(dim_x=4, dim_z=2)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_velocity_only()
             
             elif not math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
                 kf = KalmanFilter(dim_x=4, dim_z=4)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_position_and_velocity()
             
             '''elif not math.isnan(detect_info['x_acc']):
                 rospy.loginfo('Instantiating second-order Kalman filter')
                 kf = KalmanFilter(dim_x=6, dim_z=4)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, start_time, contact_id)
+                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_acceleration()'''
 
             # Add this new object to all_contacts
@@ -250,20 +241,26 @@ class KalmanTracker:
 
         else:
             # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q.
-            # Then update the time stamp for when this contact was last accessed so we know not
+            # Then update the time stamp for when this contact was last measured so we know not
             # to remove it anytime soon. 
             c = self.all_contacts[contact_id]
-            c.last_accessed = time.time()
-            epoch = c.last_accessed - c.first_accessed
+            c.last_measured = data.header.stamp
+            epoch = (c.last_measured - c.first_measured).to_sec()
+            
+            if DEBUG:
+                rospy.loginfo(c.first_measured)
+                rospy.loginfo(c.last_measured)
+                rospy.loginfo(epoch)
+
             c.dt = epoch
-            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var = 0.04**2) #TODO: Figure out what the variance should be here.
+            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var=self.variance) 
             c.info = detect_info
-            rospy.loginfo(self.qhat)
 
         # Add to self.kalman_filter
         rospy.loginfo('Calling predict() and update()')
         c = self.all_contacts[contact_id]
         c.kf.predict()
+
         if c.kf.dim_z == 4:
             c.kf.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel']))
         else:
@@ -274,11 +271,18 @@ class KalmanTracker:
         c.zs.append(c.kf.z)
         c.times.append(epoch)
 
-        # Remove items from the dictionary that have not been accessed in a while
-        '''for contact_id in self.all_contacts:
+        # Remove items from the dictionary that have not been measured in a while
+        for contact_id in self.all_contacts:
             cur_contact = self.all_contacts[contact_id]
-            if int(timestamp.second / 60) - int(cur_contact.last_accessed.second / 60) > MAX_TIME:
-                del self.all_contacts[cur_contact]'''
+            time_between_now_and_last_measured = (rospy.get_rostime() - cur_contact.last_measured).to_sec()
+
+            if DEBUG:
+                rospy.loginfo(cur_contact.last_measured)
+                rospy.loginfo(time_between_now_and_last_measured)
+
+            if time_between_now_and_last_measured > self.max_stale_contact_time:
+                if DEBUG: print('deleting stale Contact from dictionary')
+                del self.all_contacts[cur_contact]
 
 
     def run(self):

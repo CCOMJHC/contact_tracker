@@ -24,6 +24,7 @@ class Dummy():
             d = rospy.Duration(randn() * 1)
             rospy.loginfo(d)
             msg = Detect()
+            msg.header.stamp = rospy.get_rostime()
            
             if args.detect_fields == 'both':    
                 msg.p.pose.pose.position.x = x_pos + randn() * 10
