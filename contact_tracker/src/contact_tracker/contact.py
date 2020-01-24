@@ -46,6 +46,7 @@ class Contact:
         self.id = contact_id
         self.xs = []
         self.zs = []
+        self.ps = []
         self.times = []
         self.dt = 1 
 

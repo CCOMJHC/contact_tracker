@@ -11,6 +11,7 @@ import math
 import time
 import rospy
 import datetime
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -21,6 +22,7 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 from filterpy.common import Q_discrete_white_noise
+from filterpy.stats.stats import plot_covariance
 
 from dynamic_reconfigure.server import Server
 from contact_tracker.cfg import contact_trackerConfig
@@ -46,7 +48,7 @@ class KalmanTracker:
         self.all_contacts = {}
 
 
-    def plot_x_vs_y(self):
+    def plot_x_vs_y(self, output_path):
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
@@ -59,18 +61,15 @@ class KalmanTracker:
         p_xs = []
         p_ys = []
 
-        print('PRINTING MEASUREMENTS')
         for i in c.zs:
-            print(i)
             m_xs.append(i[0])
             m_ys.append(i[1])
         
-        print('PRINTING PREDICTIONS')
         for i in c.xs:
-            print(i)
             p_xs.append(i[0])
             p_ys.append(i[1])
 
+        plt.figure(figsize=(9, 9))
         plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='y')
         plt.plot(p_xs, p_ys, label='predictions', color='b')
         plt.legend()
@@ -78,10 +77,10 @@ class KalmanTracker:
         plt.ylabel('y position')
         plt.xlim(c.xs[0][0], 300)
         plt.ylim(c.xs[0][0], 300)
-        plt.show()
+        plt.savefig(output_path + '.png')
 
 
-    def plot_x_vs_time(self):
+    def plot_x_vs_time(self, output_path):
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
@@ -97,20 +96,50 @@ class KalmanTracker:
         
         for i in c.xs:
             p_xs.append(i[0])
- 
-        print('PRINTING TIMES')
-        for i in c.times:
-            print(i)
 
-
+        plt.figure(figsize=(9, 9))
         plt.scatter(c.times, m_xs, linestyle='-', label='measurements', color='y')
         plt.plot(c.times, p_xs, label='predictions', color='b')
         plt.legend()
         plt.xlabel('time')
         plt.ylabel('x position')
         plt.ylim(c.xs[0][0], 300)
-        plt.show()
+        plt.savefig(output_path + '.png')
 
+
+    def plot_ellipses(self, output_path):
+        """
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
+        """
+        
+        print('plotting covariance ellipse')
+
+        c = self.all_contacts[1]
+        plt.figure(figsize=(9, 9))
+
+        p_xs = []
+        p_ys = []
+
+        for i in c.xs:
+            p_xs.append(i[0])
+            p_ys.append(i[1])
+
+        
+        for i in range(0, len(c.xs), 4):
+            z_mean = np.array([c.zs[i][0], c.zs[i][1]])
+            cur_p = c.ps[i]
+            plot_covariance(mean=z_mean, cov=cur_p)
+        
+        plt.plot(p_xs, p_ys, label='predictions', color='g')
+        
+        plt.xlabel('x position')
+        plt.ylabel('y position')
+        plt.xlim(0, 300)
+        plt.ylim(0, 300)
+        plt.legend()
+        plt.savefig(output_path + '.png')
+        
     
     def dump(self, detect_info):
         """
@@ -269,6 +298,7 @@ class KalmanTracker:
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.kf.x)
         c.zs.append(c.kf.z)
+        c.ps.append(c.kf.P)
         c.times.append(epoch)
 
         # Remove items from the dictionary that have not been measured in a while
@@ -285,7 +315,7 @@ class KalmanTracker:
                 del self.all_contacts[cur_contact]
 
 
-    def run(self):
+    def run(self, args):
         """
         Initialize the node and set it to subscribe to the detects topic.
         """
@@ -294,19 +324,32 @@ class KalmanTracker:
         srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
         rospy.spin()
+        
+        if args.plot_type == 'xs_ys':
+            self.plot_x_vs_y(args.o)
+        elif args.plot_type =='xs_times':
+            self.plot_x_vs_time(args.o)
+        elif args.plot_type == 'ellipses':
+            self.plot_ellipses(args.o)
 
-        if DEBUG:
-            rospy.loginfo('plotting the results')
-            #self.plot_x_vs_y()
-            self.plot_x_vs_time()
 
-
-if __name__=='__main__':
+def main():
+    
+    arg_parser = argparse.ArgumentParser(description='TBD')
+    arg_parser.add_argument('-plot_type', type=str, choices=['xs_ys', 'xs_times', 'ellipses'], help='specify the type of plot to produce, if you want one')
+    arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='tracker_plot')
+    args = arg_parser.parse_args()
 
     try:
         kt = KalmanTracker()
-        kt.run()
+        kt.run(args)
 
     except rospy.ROSInterruptException:
         rospy.loginfo('Falied to initialize KalmanTracker')
         pass
+
+
+if __name__=='__main__':
+    main()
+
+
