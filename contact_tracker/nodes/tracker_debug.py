@@ -12,6 +12,8 @@ import time
 import rospy
 import datetime
 import argparse
+import numpy as np
+import matplotlib.pyplot as plt
 
 import contact_tracker.contact
 from marine_msgs.msg import Detect
@@ -46,6 +48,99 @@ class KalmanTracker:
         self.all_contacts = {}
 
 
+    def plot_x_vs_y(self, output_path):
+        """
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
+        """
+
+        c = self.all_contacts[1]
+        
+        m_xs = []
+        m_ys = []
+        p_xs = []
+        p_ys = []
+
+        for i in c.zs:
+            m_xs.append(i[0])
+            m_ys.append(i[1])
+        
+        for i in c.xs:
+            p_xs.append(i[0])
+            p_ys.append(i[1])
+
+        plt.figure(figsize=(9, 9))
+        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='y')
+        plt.plot(p_xs, p_ys, label='predictions', color='b')
+        plt.legend()
+        plt.xlabel('x position')
+        plt.ylabel('y position')
+        plt.xlim(c.xs[0][0], 300)
+        plt.ylim(c.xs[0][0], 300)
+        plt.savefig(output_path + '.png')
+
+
+    def plot_x_vs_time(self, output_path):
+        """
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
+        """
+
+        c = self.all_contacts[1]
+        
+        m_xs = []
+        p_xs = []
+
+        for i in c.zs:
+            m_xs.append(i[0])
+        
+        for i in c.xs:
+            p_xs.append(i[0])
+
+        plt.figure(figsize=(9, 9))
+        plt.scatter(c.times, m_xs, linestyle='-', label='measurements', color='y')
+        plt.plot(c.times, p_xs, label='predictions', color='b')
+        plt.legend()
+        plt.xlabel('time')
+        plt.ylabel('x position')
+        plt.ylim(c.xs[0][0], 300)
+        plt.savefig(output_path + '.png')
+
+
+    def plot_ellipses(self, output_path):
+        """
+        Visualize results of the Kalman filter by plotting the measurements against the 
+        predictions of the Kalman filter.
+        """
+        
+        print('plotting covariance ellipse')
+
+        c = self.all_contacts[1]
+        plt.figure(figsize=(9, 9))
+
+        p_xs = []
+        p_ys = []
+
+        for i in c.xs:
+            p_xs.append(i[0])
+            p_ys.append(i[1])
+
+        
+        for i in range(0, len(c.xs), 4):
+            z_mean = np.array([c.zs[i][0], c.zs[i][1]])
+            cur_p = c.ps[i]
+            plot_covariance(mean=z_mean, cov=cur_p)
+        
+        plt.plot(p_xs, p_ys, label='predictions', color='g')
+        
+        plt.xlabel('x position')
+        plt.ylabel('y position')
+        plt.xlim(0, 300)
+        plt.ylim(0, 300)
+        plt.legend()
+        plt.savefig(output_path + '.png')
+        
+    
     def dump(self, detect_info):
         """
         Print the contents of a contact's detect_info dictionary for debugging purposes.
@@ -128,6 +223,8 @@ class KalmanTracker:
         else:    
             contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
 
+
+        self.dump(detect_info)
 
         #######################################################
         ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
@@ -224,10 +321,19 @@ class KalmanTracker:
         rospy.Subscriber('/detects', Detect, self.callback)
         rospy.spin()
         
+        if args.plot_type == 'xs_ys':
+            self.plot_x_vs_y(args.o)
+        elif args.plot_type =='xs_times':
+            self.plot_x_vs_time(args.o)
+        elif args.plot_type == 'ellipses':
+            self.plot_ellipses(args.o)
+
 
 def main():
     
-    arg_parser = argparse.ArgumentParser(description='Track contacts by applying Kalman filters to incoming detect messages.')
+    arg_parser = argparse.ArgumentParser(description='Track contacts by applying Kalman filters to incoming detect messages. Optionally plot the results of the filter.')
+    arg_parser.add_argument('-plot_type', type=str, choices=['xs_ys', 'xs_times', 'ellipses'], help='specify the type of plot to produce, if you want one')
+    arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='tracker_plot')
     args = arg_parser.parse_args()
 
     try:
