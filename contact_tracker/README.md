@@ -3,21 +3,21 @@
 ##### Track contacts by applying Kalman filters to incoming detect messages
 
 ### Dependencies
-python2
-filterpy
-matplotlib
+python2\
+ROS melodic\
+filterpy\
+matplotlib\
 numpy
-ROS melodic
 
 ### Installation
 1. Install filterpy: `pip install filterpy`\
 &nbsp;&nbsp; Note: if you do not intend to run the non-production node, skip the rest of these
-installation instructions.\
-2. Install matplotlib: `sudo apt-get install python-matplotlib`\
+installation instructions.
+2. Install matplotlib: `sudo apt-get install python-matplotlib`
 3. Install numpy: `pip install numpy`
 
 ### Options
-#### tracker_debug
+#### tracker_debug.py
 
 Run the non-production tracker node, and optionally produce plots.
 
@@ -33,7 +33,7 @@ Example run:
 `$ rosrun contact_tracker tracker_debug.py -plot_type ellipses -o ~/ellipse_plot`  
 
 
-#### tracker
+#### tracker.py
 
 Run the production tracker node
 
@@ -43,4 +43,4 @@ optional arguments:\
 &nbsp;&nbsp;&nbsp;&nbsp;-h, --help &nbsp;&nbsp; show this help message and exit\
 
 Example run:  
-`$ rosrun contact_tracker tracker.py
+`$ rosrun contact_tracker tracker.py`
