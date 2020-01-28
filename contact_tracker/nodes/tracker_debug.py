@@ -27,8 +27,7 @@ from filterpy.stats.stats import plot_covariance
 from dynamic_reconfigure.server import Server
 from contact_tracker.cfg import contact_trackerConfig
 
-DEBUG = True
-
+DEBUG = True 
 
 class KalmanTracker:
     """
@@ -148,7 +147,8 @@ class KalmanTracker:
         
         print('+++++++ CONTACTS +++++++')
         for k, v in detect_info.items():
-            print(k, v)
+            rospy.loginfo(k)
+            rospy.loginfo(v)
 
 
     def reconfigure_callback(self, config, level):
@@ -171,7 +171,6 @@ class KalmanTracker:
         Keyword arguments:
         data -- the Detect message transmitted
         """
-        
         ####################################
         ####### INITIALIZE VARIABLES #######
         ####################################
@@ -223,13 +222,16 @@ class KalmanTracker:
         else:    
             contact_id = (detect_info['x_pos'], detect_info['y_pos']) # TODO: Refine this to account for movement in the contact
 
-
-        self.dump(detect_info)
+        # For debug purposes
+        '''if (not math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']) and math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])):
+            print('\nPOSITION NO VELOCITY')
+        elif (math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos']) and not math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel'])):
+            print('\nVELOCITY NO POSITION')'''
 
         #######################################################
         ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
         #######################################################
-
+        
         # Create new contact object.
         epoch = 0
         if not contact_id in self.all_contacts:
@@ -239,13 +241,13 @@ class KalmanTracker:
             
             if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
-                kf = KalmanFilter(dim_x=4, dim_z=2)
+                kf = KalmanFilter(dim_x=4, dim_z=4)
                 c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_position_only()
             
             elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity but without position')
-                kf = KalmanFilter(dim_x=4, dim_z=2)
+                kf = KalmanFilter(dim_x=4, dim_z=4)
                 c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp, contact_id)
                 c.init_kf_with_velocity_only()
             
@@ -272,27 +274,38 @@ class KalmanTracker:
             c.last_measured = data.header.stamp
             epoch = (c.last_measured - c.first_measured).to_sec()
             
-            if DEBUG:
-                rospy.loginfo(c.first_measured)
-                rospy.loginfo(c.last_measured)
-                rospy.loginfo(epoch)
-
             c.dt = epoch
             c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var=self.variance) 
             c.info = detect_info
 
+            if not math.isnan(detect_info['x_pos']):
+                c.last_xpos = detect_info['x_pos']
+                c.last_ypos = detect_info['y_pos']
+           
+            if not math.isnan(detect_info['x_vel']):
+                c.last_xvel = detect_info['x_vel']
+                c.last_yvel = detect_info['y_vel']
+
+
         # Add to self.kalman_filter
-        rospy.loginfo('Calling predict() and update()')
+        print('\n++++++++++++++')
+        print(data.header.stamp)
+        print('LAST XPOS: ', c.last_xpos)
+        print('CUR XPOS: ', detect_info['x_pos'])
         c = self.all_contacts[contact_id]
         c.kf.predict()
-
-        if c.kf.dim_z == 4:
-            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel']))
+        
+        # TODO: What to pass in here for the Nans? The last position/velocity?
+        if math.isnan(detect_info['x_pos']):
+            c.kf.update((c.last_xpos, c.last_ypos, c.info['x_vel'], c.info['y_vel']))
+        elif math.isnan(detect_info['x_vel']):
+            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.last_xvel, c.last_yvel))
         else:
-            c.kf.update((c.info['x_pos'], c.info['y_pos']))
+            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel']))
         
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.kf.x)
+        rospy.loginfo(c.kf.x)
         c.zs.append(c.kf.z)
         c.ps.append(c.kf.P)
         c.times.append(epoch)
@@ -301,10 +314,6 @@ class KalmanTracker:
         for contact_id in self.all_contacts:
             cur_contact = self.all_contacts[contact_id]
             time_between_now_and_last_measured = (rospy.get_rostime() - cur_contact.last_measured).to_sec()
-
-            if DEBUG:
-                rospy.loginfo(cur_contact.last_measured)
-                rospy.loginfo(time_between_now_and_last_measured)
 
             if time_between_now_and_last_measured > self.max_stale_contact_time:
                 if DEBUG: print('deleting stale Contact from dictionary')
