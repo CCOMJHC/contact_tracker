@@ -15,10 +15,10 @@ class Dummy():
         
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
 
-        x_pos = 0
-        y_pos = 0
-        x_vel = 1 
-        y_vel = 1 
+        x_pos = args.xpos
+        y_pos = args.ypos 
+        x_vel = args.xvel
+        y_vel = args.yvel 
         
         while x_pos < 300:
             d = rospy.Duration(randn() * 1)
@@ -58,8 +58,11 @@ class Dummy():
 
 def main():
     
-    arg_parser = argparse.ArgumentParser(description='TBD')
-    arg_parser.add_argument('-detect_fields', type=str, choices=['pos_only', 'vel_only', 'both', 'x_pos_no_y_pos', 'y_pos_no_x_pos', 'x_vel_no_y_vel', 'y_vel_no_x_vel'], help='type of data to be sent with the Detect messages')
+    arg_parser = argparse.ArgumentParser(description='Send fake Detect data to the tracker node for testing purposes.')
+    arg_parser.add_argument('xpos', type=float, help='initial x position of the object')
+    arg_parser.add_argument('ypos', type=float, help='initial y position of the object')
+    arg_parser.add_argument('xvel', type=float, help='initial x velocity of the object')
+    arg_parser.add_argument('yvel', type=float, help='initial y velocity of the object')
     args = arg_parser.parse_args()
 
     rospy.init_node('dummy')

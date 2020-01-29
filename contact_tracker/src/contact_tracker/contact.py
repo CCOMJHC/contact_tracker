@@ -22,7 +22,7 @@ class Contact:
     Class to create contact object with its own KalmanFilter.
     """
 
-    def __init__(self, detect_info, kf, variance, timestamp, contact_id):
+    def __init__(self, detect_info, kf, variance, timestamp):
         """
         Define the constructor.
         
@@ -43,12 +43,16 @@ class Contact:
         self.variance = variance 
         self.first_measured = timestamp
         self.last_measured = timestamp
-        self.id = contact_id
+        self.id = timestamp 
         self.xs = []
         self.zs = []
         self.ps = []
         self.times = []
         self.dt = 1 
+        self.last_xpos = 0
+        self.last_ypos = 0
+        self.last_xvel = 0
+        self.last_yvel = 0
 
 
     def init_kf_with_position_only(self):
@@ -76,11 +80,15 @@ class Contact:
 
         # Define the measurement function
         self.kf.H = np.array([[1, 0, 0, 0],
-                              [0, 1, 0, 0]])
+                              [0, 1, 0, 0],
+                              [0, 0, 0, 0],
+                              [0, 0, 0, 0]])
 
         # Define the measurement covariance
-        self.kf.R = np.array([[self.variance, 0],
-                              [0, self.variance]])
+        self.kf.R = np.array([[self.variance, 0, 0, 0],
+                              [0, self.variance, 0, 0],
+                              [0, 0, self.variance, 0],
+                              [0, 0, 0, self.variance]])
 
 
     def init_kf_with_velocity_only(self):
@@ -93,7 +101,7 @@ class Contact:
 
         # Define the state covariance matrix
         self.kf.P = np.array([[0, 0, 0, 0],
-                              [0, 0, 0 , 0],
+                              [0, 0, 0, 0],
                               [0, 0, self.info['twist_covar'][0], 0],
                               [0, 0, 0, self.info['twist_covar'][7]]])
 
@@ -107,12 +115,16 @@ class Contact:
                               [0, 0, 0, 1]])
 
         # Define the measurement function
-        self.kf.H = np.array([[0, 0, 1, 0],
+        self.kf.H = np.array([[0, 0, 0, 0],
+                              [0, 0, 0, 0],
+                              [0, 0, 1, 0],
                               [0, 0, 0, 1]])
 
         # Define the measurement covariance
-        self.kf.R = np.array([[self.variance, 0],
-                              [0, self.variance]])
+        self.kf.R = np.array([[self.variance, 0, 0, 0],
+                              [0, self.variance, 0, 0],
+                              [0, 0, self.variance, 0],
+                              [0, 0, 0, self.variance]])
 
 
     def init_kf_with_position_and_velocity(self):
