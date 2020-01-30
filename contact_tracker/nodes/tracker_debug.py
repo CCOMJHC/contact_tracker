@@ -52,31 +52,45 @@ class KalmanTracker:
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
         """
-
-        c = self.all_contacts[1]
         
-        m_xs = []
-        m_ys = []
-        p_xs = []
-        p_ys = []
+        all_mxs = []
+        all_mys = []
+        all_pxs = []
+        all_pys = []
 
-        for i in c.zs:
-            m_xs.append(i[0])
-            m_ys.append(i[1])
+        for contact in self.all_contacts:
+            c = self.all_contacts[contact]
         
-        for i in c.xs:
-            p_xs.append(i[0])
-            p_ys.append(i[1])
+            m_xs = []
+            m_ys = []
+            p_xs = []
+            p_ys = []
+
+            for i in c.zs:
+                m_xs.append(i[0])
+                m_ys.append(i[1])
+        
+            for i in c.xs:
+                p_xs.append(i[0])
+                p_ys.append(i[1])
+
+            all_mxs.append(m_xs)
+            all_mys.append(m_ys)
+            all_pxs.append(p_xs)
+            all_pys.append(p_ys)
+
+        for i in range(0, len(all_mxs)):
+            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
+            plt.plot(all_pxs[i], all_pys[i], label='kf ' + str (i) + ' predictions')
 
         plt.figure(figsize=(9, 9))
-        plt.scatter(m_xs, m_ys, linestyle='-', label='measurements', color='y')
-        plt.plot(p_xs, p_ys, label='predictions', color='b')
         plt.legend()
         plt.xlabel('x position')
         plt.ylabel('y position')
-        plt.xlim(c.xs[0][0], 300)
-        plt.ylim(c.xs[0][0], 300)
-        plt.savefig(output_path + '.png')
+        plt.xlim(0, 500)
+        plt.ylim(0, 500)
+        plt.show()
+        #plt.savefig(output_path + '.png')
 
 
     def plot_x_vs_time(self, output_path):
@@ -140,32 +154,57 @@ class KalmanTracker:
         plt.savefig(output_path + '.png')
         
     
-    def dump(self, detect_info):
+    def dump_detect(self, detect_info):
         """
         Print the contents of a contact's detect_info dictionary for debugging purposes.
+
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info to be printed
+        """
+        
+        print('+++++++ DETECT +++++++')
+        for k, v in detect_info.items():
+            print(k, ': ', v)
+
+
+    def dump_contacts(self):
+        """
+        Print the contents of the all_contacts  dictionary for debugging purposes.
         """
         
         print('+++++++ CONTACTS +++++++')
-        for k, v in detect_info.items():
-            rospy.loginfo(k)
-            rospy.loginfo(v)
+        for k, v in self.all_contacts.items():
+            print(k, ': ', v)
 
 
     def check_all_contacts(self, detect_info, new_stamp):
         """
-        Iterate over every contact in the dictionary and return contact with the least???
+        Iterate over every contact in the dictionary and return contact the current Detect is 
+        most likely associated with. Otherwise, return the timestamp of the current Detect message
+        as the new hash_key for the new Contact that will be made.
 
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
         """
-
+ 
+        #TODO: Figure out how to compute this when the positions are NaNs.
+        #TODO: Ask about abs value and about the multiplier.
+        #TODO: Ask about appropriate values for the pos covariance.
         for contact in self.all_contacts:
             c = self.all_contacts[contact]
-            if (((detect_info['x_pos'] - c.kf.x[0]) < ((detect_info['pos_covar'][0] + c.kf.R[0][0]) * 2)) and ((detect_info['y_pos'] - c.kf.x[1]) < ((detect_info['pos_covar'][7] + c.kf.R[1][1]) * 2))):
-                
+
+            if DEBUG:
+                print('x measurement: ', detect_info['x_pos'])
+                print('x prediction: ', c.kf.x[0])
+                print('y measurement: ', detect_info['y_pos'])
+                print('y prediction: ', c.kf.x[1])
+                       
+            # measurement - prediction < uncertainty_in_measurement + uncertainty_in_prediction
+            if ((abs(detect_info['x_pos'] - c.kf.x[0]) < (detect_info['pos_covar'][0] + c.kf.R[0][0]) * 1.5) and 
+                (abs(detect_info['y_pos'] - c.kf.x[1]) < (detect_info['pos_covar'][7] + c.kf.R[1][1]) * 1.5)):
                  return c.id
                  
-        # No appropriate contacts were found, so return a new id
+        # No appropriate contacts were found, so return the stamp of the Detect message being checked
         return new_stamp
 
 
@@ -240,12 +279,9 @@ class KalmanTracker:
         #  Otherwise, we have to check each contact in the dictionary to see if 
         #  it is a potential match for our current Detect message. 
         if len(self.all_contacts) == 0:
-            print('no contacts have yet been added')
             contact_id  = data.header.stamp 
         else:
-            print('looking up contact for this Detect')
             contact_id = self.check_all_contacts(detect_info, data.header.stamp)
-            print('contact: ', contact_id)
             
 
         #######################################################
@@ -305,7 +341,8 @@ class KalmanTracker:
             if not math.isnan(detect_info['x_vel']):
                 c.last_xvel = detect_info['x_vel']
                 c.last_yvel = detect_info['y_vel']
-
+        
+        self.dump_contacts()
 
         # Add to self.kalman_filter
         c = self.all_contacts[contact_id]
