@@ -51,6 +51,9 @@ class KalmanTracker:
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
+
+        Keyword arguments:
+        output_path -- The path that the plot will be saved to
         """
         
         all_mxs = []
@@ -89,34 +92,48 @@ class KalmanTracker:
         plt.ylabel('y position')
         plt.xlim(0, 500)
         plt.ylim(0, 500)
-        plt.show()
-        #plt.savefig(output_path + '.png')
+        plt.savefig(output_path + '.png')
 
 
     def plot_x_vs_time(self, output_path):
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
+        
+        Keyword arguments:
+        output_path -- The path that the plot will be saved to
         """
 
-        c = self.all_contacts[1]
-        
-        m_xs = []
-        p_xs = []
+        all_mxs = []
+        all_pxs = []
+        all_times = []
 
-        for i in c.zs:
-            m_xs.append(i[0])
+        for contact in self.all_contacts:
+            c = self.all_contacts[contact]
+         
+            m_xs = []
+            p_xs = []
+
+            for i in c.zs:
+                m_xs.append(i[0])
         
-        for i in c.xs:
-            p_xs.append(i[0])
+            for i in c.xs:
+                p_xs.append(i[0])
+
+            all_mxs.append(m_xs)
+            all_pxs.append(p_xs)
+            all_times.append(c.times)
+
+        for i in range(0, len(all_mxs)):
+            plt.scatter(all_times[i], all_mxs[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
+            plt.plot(all_times[i], all_pxs[i], label='kf ' + str (i) + ' predictions')
 
         plt.figure(figsize=(9, 9))
-        plt.scatter(c.times, m_xs, linestyle='-', label='measurements', color='y')
-        plt.plot(c.times, p_xs, label='predictions', color='b')
         plt.legend()
         plt.xlabel('time')
         plt.ylabel('x position')
-        plt.ylim(c.xs[0][0], 300)
+        plt.ylim(0, 300)
+        plt.show()
         plt.savefig(output_path + '.png')
 
 
@@ -124,33 +141,55 @@ class KalmanTracker:
         """
         Visualize results of the Kalman filter by plotting the measurements against the 
         predictions of the Kalman filter.
+        
+        Keyword arguments:
+        output_path -- The path that the plot will be saved to
         """
-        
-        print('plotting covariance ellipse')
 
-        c = self.all_contacts[1]
+        all_pxs = []
+        all_pys = []
+        all_zs = []
+        all_ps = []
+
+        for contact in self.all_contacts:
+            c = self.all_contacts[contact]
+            p_xs = []
+            p_ys = []
+            cur_ps = []
+            z_means = []
+
+            for i in c.xs:
+                p_xs.append(i[0])
+                p_ys.append(i[1])
+
+            all_pxs.append(p_xs)
+            all_pys.append(p_ys)
+
+            for i in range(0, len(c.xs), 4):
+                z_mean = np.array([c.zs[i][0], c.zs[i][1]])
+                cur_p = c.ps[i]
+                #z_means.append(np.array([c.zs[i][0], c.zs[i][1]]))
+                #cur_ps.append(c.ps[i])
+                plot_covariance(mean=z_mean, cov=cur_p)
+
+            all_zs.append(z_means)
+            all_ps.append(cur_ps)
+
+        #for i in range(0, len(all_zs)):
+            #print('z: ', all_zs[i][0])
+            #print('p: ', all_ps[i][0])
+            #plot_covariance(mean=all_zs[i], cov=all_ps[i][0])
+            
+        for i in range(0, len(all_pxs)):
+            plt.plot(all_pxs[i], all_pys[i], label='predictions', color='g')
+
         plt.figure(figsize=(9, 9))
-
-        p_xs = []
-        p_ys = []
-
-        for i in c.xs:
-            p_xs.append(i[0])
-            p_ys.append(i[1])
-
-        
-        for i in range(0, len(c.xs), 4):
-            z_mean = np.array([c.zs[i][0], c.zs[i][1]])
-            cur_p = c.ps[i]
-            plot_covariance(mean=z_mean, cov=cur_p)
-        
-        plt.plot(p_xs, p_ys, label='predictions', color='g')
-        
         plt.xlabel('x position')
         plt.ylabel('y position')
         plt.xlim(0, 300)
         plt.ylim(0, 300)
         plt.legend()
+        plt.show()
         plt.savefig(output_path + '.png')
         
     
@@ -200,8 +239,8 @@ class KalmanTracker:
                 print('y prediction: ', c.kf.x[1])
                        
             # measurement - prediction < uncertainty_in_measurement + uncertainty_in_prediction
-            if ((abs(detect_info['x_pos'] - c.kf.x[0]) < (detect_info['pos_covar'][0] + c.kf.R[0][0]) * 1.5) and 
-                (abs(detect_info['y_pos'] - c.kf.x[1]) < (detect_info['pos_covar'][7] + c.kf.R[1][1]) * 1.5)):
+            if ((abs(detect_info['x_pos'] - c.kf.x[0]) < (detect_info['pos_covar'][0] + c.kf.R[0][0])) and 
+                (abs(detect_info['y_pos'] - c.kf.x[1]) < (detect_info['pos_covar'][7] + c.kf.R[1][1]))):
                  return c.id
                  
         # No appropriate contacts were found, so return the stamp of the Detect message being checked
