@@ -5,7 +5,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Date last modified: 01/15/2020
+# Date last modified: 02/04/2020
 
 import math
 import time
@@ -29,7 +29,7 @@ from contact_tracker.cfg import contact_trackerConfig
 
 DEBUG = True 
 
-class KalmanTracker:
+class ContactTracker:
     """
     Class to create custom Kalman filter.
     """
@@ -86,7 +86,6 @@ class KalmanTracker:
             plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
             plt.plot(all_pxs[i], all_pys[i], label='kf ' + str (i) + ' predictions')
 
-        plt.figure(figsize=(9, 9))
         plt.legend()
         plt.xlabel('x position')
         plt.ylabel('y position')
@@ -128,12 +127,10 @@ class KalmanTracker:
             plt.scatter(all_times[i], all_mxs[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
             plt.plot(all_times[i], all_pxs[i], label='kf ' + str (i) + ' predictions')
 
-        plt.figure(figsize=(9, 9))
         plt.legend()
         plt.xlabel('time')
         plt.ylabel('x position')
         plt.ylim(0, 300)
-        plt.show()
         plt.savefig(output_path + '.png')
 
 
@@ -168,28 +165,20 @@ class KalmanTracker:
             for i in range(0, len(c.xs), 4):
                 z_mean = np.array([c.zs[i][0], c.zs[i][1]])
                 cur_p = c.ps[i]
-                #z_means.append(np.array([c.zs[i][0], c.zs[i][1]]))
-                #cur_ps.append(c.ps[i])
                 plot_covariance(mean=z_mean, cov=cur_p)
 
             all_zs.append(z_means)
             all_ps.append(cur_ps)
 
-        #for i in range(0, len(all_zs)):
-            #print('z: ', all_zs[i][0])
-            #print('p: ', all_ps[i][0])
-            #plot_covariance(mean=all_zs[i], cov=all_ps[i][0])
             
         for i in range(0, len(all_pxs)):
             plt.plot(all_pxs[i], all_pys[i], label='predictions', color='g')
 
-        plt.figure(figsize=(9, 9))
         plt.xlabel('x position')
         plt.ylabel('y position')
         plt.xlim(0, 300)
         plt.ylim(0, 300)
         plt.legend()
-        plt.show()
         plt.savefig(output_path + '.png')
         
     
@@ -216,61 +205,17 @@ class KalmanTracker:
             print(k, ': ', v)
 
 
-    def check_all_contacts(self, detect_info, new_stamp):
+    def populate_detect_info(self, data):
         """
-        Iterate over every contact in the dictionary and return contact the current Detect is 
-        most likely associated with. Otherwise, return the timestamp of the current Detect message
-        as the new hash_key for the new Contact that will be made.
+        Initialize the data structure for this detect message and check 
+        for empty position and velocity fields. Return an empty dictionary 
+        if one position or velocity field is empty and the other position
+        or velocity field is not.
 
         Keyword arguments:
-        detect_info -- the dictionary containing the detect info to be checked
+        data -- The detect message that was just transmitted
         """
- 
-        #TODO: Figure out how to compute this when the positions are NaNs.
-        #TODO: Ask about abs value and about the multiplier.
-        #TODO: Ask about appropriate values for the pos covariance.
-        for contact in self.all_contacts:
-            c = self.all_contacts[contact]
-
-            if DEBUG:
-                print('x measurement: ', detect_info['x_pos'])
-                print('x prediction: ', c.kf.x[0])
-                print('y measurement: ', detect_info['y_pos'])
-                print('y prediction: ', c.kf.x[1])
-                       
-            # measurement - prediction < uncertainty_in_measurement + uncertainty_in_prediction
-            if ((abs(detect_info['x_pos'] - c.kf.x[0]) < (detect_info['pos_covar'][0] + c.kf.R[0][0])) and 
-                (abs(detect_info['y_pos'] - c.kf.x[1]) < (detect_info['pos_covar'][7] + c.kf.R[1][1]))):
-                 return c.id
-                 
-        # No appropriate contacts were found, so return the stamp of the Detect message being checked
-        return new_stamp
-
-
-    def reconfigure_callback(self, config, level):
-        """
-        Get the parameters from the cfg file and assign them to the member variables of the 
-        KalmanTracker class.
-        """
-
-        self.qhat = config['qhat']
-        self.max_stale_contact_time = config['max_stale_contact_time']
-        self.initial_velocity = config['initial_velocity']
-        self.variance = config['variance']
-        return config
-
-
-    def callback(self, data):
-        """
-        Listen for detects and add to dictionary and filter if not already there.
-
-        Keyword arguments:
-        data -- the Detect message transmitted
-        """
-        ####################################
-        ####### INITIALIZE VARIABLES #######
-        ####################################
-
+        
         # Get necessary info from the Detect data
         detect_info = {
                 'header': data.header,
@@ -308,11 +253,92 @@ class KalmanTracker:
         # Check to see that if one coordinate is not NaN, neither is the other
         if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
             if DEBUG: print('ERROR: x_pos and y_pos both were not nans...returning')
-            return 
+            return {} 
         if ((not math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])) or (math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel']))):
             if DEBUG: print('ERROR: x_vel and y_vel both were not nans...returning')
-            return 
+            return {}
+
+        return detect_info
+
+
+    def check_all_contacts(self, detect_info, new_stamp):
+        """
+        Iterate over every contact in the dictionary and return contact the current Detect is 
+        most likely associated with. Otherwise, return the timestamp of the current Detect message
+        as the new hash_key for the new Contact that will be made.
+
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info to be checked
+        """
+ 
+        #TODO: Figure out how to compute this when the positions are NaNs.
+        #TODO: Ask about abs value and about the multiplier.
+        #TODO: Ask about appropriate values for the pos covariance.
+        #TODO: Ask which of the filters in the filter bank should be used? For now I'm just iterating
+        #      over all of them, but somehow I'm not sure that this is correct.
+        for contact in self.all_contacts:
+            c = self.all_contacts[contact]
+
+            '''if DEBUG:
+                print('x measurement: ', detect_info['x_pos'])
+                print('x prediction: ', c.kf.x[0])
+                print('y measurement: ', detect_info['y_pos'])
+                print('y prediction: ', c.kf.x[1])'''
+                       
+            # measurement - prediction < uncertainty_in_measurement + uncertainty_in_prediction
+            for kf in c.filter_bank.filters:
+                if ((abs(detect_info['x_pos'] - kf.x[0]) < (detect_info['pos_covar'][0] + kf.R[0][0])) and 
+                    (abs(detect_info['y_pos'] - kf.x[1]) < (detect_info['pos_covar'][7] + kf.R[1][1]))):
+                     return c.id
+                 
+        # No appropriate contacts were found, so return the stamp of the Detect message being checked
+        return new_stamp
+
         
+    def delete_stale_contacts(self):
+        """
+        Remove items from the dictionary that have not been measured in a while
+        """
+        
+        for contact_id in self.all_contacts:
+            cur_contact = self.all_contacts[contact_id]
+            time_between_now_and_last_measured = (rospy.get_rostime() - cur_contact.last_measured).to_sec()
+
+            if time_between_now_and_last_measured > self.max_stale_contact_time:
+                if DEBUG: print('deleting stale Contact from dictionary')
+                del self.all_contacts[cur_contact]
+
+
+    def reconfigure_callback(self, config, level):
+        """
+        Get the parameters from the cfg file and assign them to the member variables of the 
+        KalmanTracker class.
+        """
+
+        self.qhat = config['qhat']
+        self.max_stale_contact_time = config['max_stale_contact_time']
+        self.initial_velocity = config['initial_velocity']
+        self.variance = config['variance']
+        return config
+
+
+    def callback(self, data):
+        """
+        Listen for detects and add to dictionary and filter if not already there.
+
+        Keyword arguments:
+        data -- the Detect message transmitted
+        """
+
+        ########################################################
+        ###### VARIABLE INITIALIZATION AND ERROR HANDLING ######
+        ########################################################
+         
+        # Initialize variables
+        detect_info = self.populate_detect_info(data)
+        if len(detect_info) == 0: 
+            return
+
         #  Compare new measurement to prediction at same time.
         #  If there are no contacts yet, no need to traverse empty dictionary
         #  Otherwise, we have to check each contact in the dictionary to see if 
@@ -333,11 +359,12 @@ class KalmanTracker:
           
             kf = None
             c = None
-            
             if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
-                kf = KalmanFilter(dim_x=4, dim_z=4)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp)
+                first_order_kf = KalmanFilter(dim_x=6, dim_z=6)
+                second_order_kf = KalmanFilter(dim_x=6, dim_z=6)
+                filter_bank = [first_order_kf, second_order_kf]
+                c = contact_tracker.contact.Contact(detect_info, filter_bank, self.variance, data.header.stamp)
                 c.init_kf_with_position_only()
             
             elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
@@ -352,12 +379,6 @@ class KalmanTracker:
                 c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp)
                 c.init_kf_with_position_and_velocity()
             
-            '''elif not math.isnan(detect_info['x_acc']):
-                rospy.loginfo('Instantiating second-order Kalman filter')
-                kf = KalmanFilter(dim_x=6, dim_z=4)
-                c = contact_tracker.contact.Contact(detect_info, kf, self.variance, data.header.stamp)
-                c.init_kf_with_acceleration()'''
-
             # Add this new object to all_contacts
             self.all_contacts[data.header.stamp] = c
 
@@ -370,7 +391,8 @@ class KalmanTracker:
             epoch = (c.last_measured - c.first_measured).to_sec()
             
             c.dt = epoch
-            c.kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var=self.variance) 
+            for kf in c.filter_bank.filters:
+                kf.Q = Q_discrete_white_noise(dim=4, dt=epoch*self.qhat, var=self.variance) 
             c.info = detect_info
 
             if not math.isnan(detect_info['x_pos']):
@@ -381,33 +403,25 @@ class KalmanTracker:
                 c.last_xvel = detect_info['x_vel']
                 c.last_yvel = detect_info['y_vel']
         
-        self.dump_contacts()
-
         # Add to self.kalman_filter
         c = self.all_contacts[contact_id]
-        c.kf.predict()
+        c.filter_bank.predict()
         
         if math.isnan(detect_info['x_pos']):
-            c.kf.update((c.last_xpos, c.last_ypos, c.info['x_vel'], c.info['y_vel']))
+            c.filter_bank.update((c.last_xpos, c.last_ypos, c.info['x_vel'], c.info['y_vel'], 0, 0))
         elif math.isnan(detect_info['x_vel']):
-            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.last_xvel, c.last_yvel))
+            c.filter_bank.update((c.info['x_pos'], c.info['y_pos'], c.last_xvel, c.last_yvel, 0, 0))
         else:
-            c.kf.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel']))
+            c.filter_bank.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel'], 0, 0))
         
         # Append appropriate prior and measurements to lists here
-        c.xs.append(c.kf.x)
-        c.zs.append(c.kf.z)
-        c.ps.append(c.kf.P)
+        c.xs.append(c.filter_bank.x)
+        c.zs.append(c.filter_bank.z)
+        c.ps.append(c.filter_bank.P)
         c.times.append(epoch)
 
         # Remove items from the dictionary that have not been measured in a while
-        '''for contact_id in self.all_contacts:
-            cur_contact = self.all_contacts[contact_id]
-            time_between_now_and_last_measured = (rospy.get_rostime() - cur_contact.last_measured).to_sec()
-
-            if time_between_now_and_last_measured > self.max_stale_contact_time:
-                if DEBUG: print('deleting stale Contact from dictionary')
-                del self.all_contacts[cur_contact]'''
+        #self.delete_stale_contacts()
 
 
     def run(self, args):
@@ -436,11 +450,11 @@ def main():
     args = arg_parser.parse_args()
 
     try:
-        kt = KalmanTracker()
-        kt.run(args)
+        ct = ContactTracker()
+        ct.run(args)
 
     except rospy.ROSInterruptException:
-        rospy.loginfo('Falied to initialize KalmanTracker')
+        rospy.loginfo('Falied to initialize the ContactTracker')
         pass
 
 
