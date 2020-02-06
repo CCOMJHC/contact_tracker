@@ -14,7 +14,6 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 from filterpy.kalman import IMMEstimator
-from filterpy.common import Q_discrete_white_noise 
 
 
 
@@ -40,10 +39,9 @@ class Contact:
         """
 
         self.info = detect_info
-        #TODO: Ask Val what the values for this should be and potentially add to the config file.
-        self.mu = np.array([0.5, 0.5])
+        self.mu = np.array([0.3, 0.7])
         self.M = np.array([[0.97, 0.03],
-                           [0.03, 0.97]])
+                           [0.05, 0.95]])
         self.filter_bank = IMMEstimator(all_filters, self.mu, self.M)
         self.variance = variance 
         self.first_measured = timestamp
@@ -179,12 +177,17 @@ class Contact:
                              [0, 0, 0, 0, 0, 1]])
 
             # Define the measurement covariance
-            kf.R = np.array([[self.variance, 0, 0, 0],
-                             [0, self.variance, 0, 0],
-                             [0, 0, self.variance, 0],
-                             [0, 0, 0, self.variance],
+            kf.R = np.array([[self.variance, 0, 0, 0, 0, 0],
+                             [0, self.variance, 0, 0, 0, 0],
+                             [0, 0, self.variance, 0, 0, 0],
+                             [0, 0, 0, self.variance, 0, 0],
                              [0, 0, 0, 0, self.variance, 0],
                              [0, 0, 0, 0, 0, self.variance]])
 
 
+    def recompute_q(Q_vars):
+        """
+        Recompute the values of Q for the Kalman filters in this Contact.
+        """
 
+        pass
