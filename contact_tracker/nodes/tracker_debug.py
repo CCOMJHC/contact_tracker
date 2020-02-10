@@ -13,14 +13,17 @@ import rospy
 import datetime
 import argparse
 import numpy as np
+from numpy import zeros
 import matplotlib.pyplot as plt
 
 import contact_tracker.contact
 from marine_msgs.msg import Detect
 
+from filterpy.kalman import IMMEstimator
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
+from filterpy.common import Q_discrete_white_noise
 from filterpy.stats.stats import plot_covariance
 
 from dynamic_reconfigure.server import Server
@@ -313,15 +316,6 @@ class ContactTracker:
         self.max_stale_contact_time = config['max_stale_contact_time']
         self.initial_velocity = config['initial_velocity']
         self.variance = config['variance']
-        self.Q_vars = {
-                'q0_xy': config['q0_xy'],
-                'q0_v': config['q0_v'],
-                'q0_a': config['q0_a'],
-                'dq_xy': config['dq_xy'],
-                'dq_v': config['dq_v'],
-                'dq_a': config['dq_a'],
-        }
-
         return config
 
 
@@ -361,8 +355,8 @@ class ContactTracker:
           
             first_order_kf = KalmanFilter(dim_x=6, dim_z=6)
             second_order_kf = KalmanFilter(dim_x=6, dim_z=6)
-            filter_bank = [first_order_kf, second_order_kf]
-            c = contact_tracker.contact.Contact(detect_info, filter_bank, self.variance, data.header.stamp)
+            all_filters = [first_order_kf, second_order_kf]
+            c = contact_tracker.contact.Contact(detect_info, all_filters, self.variance, data.header.stamp)
             
             if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
                 rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
@@ -376,6 +370,7 @@ class ContactTracker:
                 rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
                 c.init_kf_with_position_and_velocity()
             
+            c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
             self.all_contacts[data.header.stamp] = c
 
         else:
@@ -387,8 +382,7 @@ class ContactTracker:
             epoch = (c.last_measured - c.first_measured).to_sec()
             
             c.dt = epoch
-            for kf in c.filter_bank.filters:
-                kf.Q = c.recompute_q(self.Q_vars) 
+            c.recompute_q(epoch) 
             c.info = detect_info
 
             if not math.isnan(detect_info['x_pos']):
@@ -404,7 +398,7 @@ class ContactTracker:
         c.filter_bank.predict()
         
         if math.isnan(detect_info['x_pos']):
-            c.filter_bank.update((c.last_xpos, c.last_ypos, c.info['x_vel'], c.info['y_vel'], 0, 0))
+            c.filter_bank.update(([[c.last_xpos, c.last_ypos], [c.info['x_vel'], c.info['y_vel']]]))
         elif math.isnan(detect_info['x_vel']):
             c.filter_bank.update((c.info['x_pos'], c.info['y_pos'], c.last_xvel, c.last_yvel, 0, 0))
         else:
@@ -412,12 +406,12 @@ class ContactTracker:
         
         # Append appropriate prior and measurements to lists here
         c.xs.append(c.filter_bank.x)
-        c.zs.append(c.filter_bank.z)
+        c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
         c.ps.append(c.filter_bank.P)
         c.times.append(epoch)
 
         # Remove items from the dictionary that have not been measured in a while
-        self.delete_stale_contacts()
+        #self.delete_stale_contacts()
 
 
     def run(self, args):

@@ -14,6 +14,7 @@ from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
 from filterpy.kalman import IMMEstimator
+from filterpy.common import Q_discrete_white_noise
 
 
 
@@ -42,7 +43,8 @@ class Contact:
         self.mu = np.array([0.3, 0.7])
         self.M = np.array([[0.97, 0.03],
                            [0.05, 0.95]])
-        self.filter_bank = IMMEstimator(all_filters, self.mu, self.M)
+        self.all_filters = all_filters # This is purely for initializing the filters
+        self.filter_bank = None
         self.variance = variance 
         self.first_measured = timestamp
         self.last_measured = timestamp
@@ -63,12 +65,12 @@ class Contact:
         Initialize each filter in this Contact's filter bank given only values for position.
         """
 
-        for kf in self.filter_bank.filters:
+        for i in range(0, len(self.filter_bank.filters)):
             # Define the state variable vector
-            kf.x = np.array([self.info['x_pos'], self.info['y_pos'], 0, 0, 0, 0]).T
+            self.filter_bank.filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], 0, 0, 0, 0]).T
     
             # Define the state covariance matrix
-            kf.P = np.array([[self.info['pos_covar'][0], 0, 0, 0, 0, 0],
+            self.filter_bank.filters[i].P = np.array([[self.info['pos_covar'][0], 0, 0, 0, 0, 0],
                              [0, self.info['pos_covar'][7], 0 , 0, 0, 0],
                              [0, 0, 0, 0, 0, 0],
                              [0, 0, 0, 0, 0, 0],
@@ -76,10 +78,10 @@ class Contact:
                              [0, 0, 0, 0, 0, 0]])
     
             # Define the noise covariance (TBD)
-            kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance)
+            self.filter_bank.filters[i].Q = Q_discrete_white_noise(dim=2, dt=self.dt, var=self.variance, block_size=3, order_by_dim=False)
 
             # Define the process model matrix
-            kf.F = np.array([[1, 0, self.dt, 0, 0, 0],
+            self.filter_bank.filters[i].F = np.array([[1, 0, self.dt, 0, 0, 0],
                              [0, 1, 0, self.dt, 0, 0],
                              [0, 0, 1, 0, 0, 0],
                              [0, 0, 0, 1, 0, 0],
@@ -87,7 +89,7 @@ class Contact:
                              [0, 0, 0, 0, 0, 1]])
     
             # Define the measurement function
-            kf.H = np.array([[1, 0, 0, 0, 0, 0],
+            self.filter_bank.filters[i].H = np.array([[1, 0, 0, 0, 0, 0],
                              [0, 1, 0, 0, 0, 0],
                              [0, 0, 0, 0, 0, 0],
                              [0, 0, 0, 0, 0, 0],
@@ -95,7 +97,7 @@ class Contact:
                              [0, 0, 0, 0, 0, 0]])
 
             # Define the measurement covariance
-            kf.R = np.array([[self.variance, 0, 0, 0, 0, 0],
+            self.filter_bank.filters[i].R = np.array([[self.variance, 0, 0, 0, 0, 0],
                              [0, self.variance, 0, 0, 0, 0],
                              [0, 0, self.variance, 0, 0, 0],
                              [0, 0, 0, self.variance, 0, 0],
@@ -109,35 +111,60 @@ class Contact:
         Initialize a first-oder KalmanFilter given only values for velocity.
         """
 
-        # Define the state variable vector
-        self.kf.x = np.array([0, 0, self.info['x_vel'], self.info['y_vel']]).T
+        for i in range(0, len(self.filter_bank.filters)):
+            # Define the state variable vector
+            '''self.filter_bank.filters[i].x = np.array([0, 0, self.info['x_vel'], self.info['y_vel']]).T
 
-        # Define the state covariance matrix
-        self.kf.P = np.array([[0, 0, 0, 0],
+            # Define the state covariance matrix
+            self.filter_bank.filters[i].P = np.array([[0, 0, 0, 0],
                               [0, 0, 0, 0],
                               [0, 0, self.info['twist_covar'][0], 0],
                               [0, 0, 0, self.info['twist_covar'][7]]])
 
-        # Define the noise covariance (TBD)
-        self.kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
+            # Define the noise covariance (TBD)
+            self.filter_bank.filters[i].Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
 
-        # Define the process model matrix 
-        self.kf.F = np.array([[1, 0, self.dt, 0],
+            # Define the process model matrix 
+            self.filter_bank.filters[i].F = np.array([[1, 0, self.dt, 0],
                               [0, 1, 0, self.dt],
                               [0, 0, 1, 0],
                               [0, 0, 0, 1]])
 
-        # Define the measurement function
-        self.kf.H = np.array([[0, 0, 0, 0],
+            # Define the measurement function
+            self.filter_bank.filters[i].H = np.array([[0, 0, 0, 0],
                               [0, 0, 0, 0],
                               [0, 0, 1, 0],
                               [0, 0, 0, 1]])
 
-        # Define the measurement covariance
-        self.kf.R = np.array([[self.variance, 0, 0, 0],
+            # Define the measurement covariance
+            self.filter_bank.filters[i].R = np.array([[self.variance, 0, 0, 0],
                               [0, self.variance, 0, 0],
                               [0, 0, self.variance, 0],
-                              [0, 0, 0, self.variance]])
+                              [0, 0, 0, self.variance]])'''
+            self.filter_bank.filters[i].x = np.array([[self.info['x_vel'], self.info['y_vel']], [0, 0]]).T
+
+            # Define the state covariance matrix
+            self.filter_bank.filters[i].P = np.array([
+                              [self.info['twist_covar'][0], 0],
+                              [0, self.info['twist_covar'][7]]])
+
+            # Define the noise covariance (TBD)
+            self.filter_bank.filters[i].Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
+
+            # Define the process model matrix 
+            self.filter_bank.filters[i].F = np.array([[1, 0],
+                              [0, self.dt]])
+
+            # Define the measurement function
+            self.filter_bank.filters[i].H = np.array([
+                              [1, 0],
+                              [0, 1]])
+
+            # Define the measurement covariance
+            self.filter_bank.filters[i].R = np.array([[self.variance, 0],
+                              [0, self.variance]])
+
+
 
 
     def init_kf_with_position_and_velocity(self):
@@ -145,7 +172,7 @@ class Contact:
         Initialize a first-order KalmanFilter given values for position and velocity.
         """
         
-        for kf in self.filter_bank.filters:
+        for kf in self.all_filters:
             # Define the state variable vector
             kf.x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], 0, 0]).T
 
@@ -158,7 +185,7 @@ class Contact:
                              [0, 0, 0, 0, 0, 0]])
 
             # Define the noise covariance (TBD)
-            kf.Q = Q_discrete_white_noise(dim=4, dt=self.dt, var=self.variance) 
+            kf.Q = Q_discrete_white_noise(dim=2, dt=self.dt, var=self.variance, block_size=3, order_by_dim=False) 
 
             # Define the process model matrix
             kf.F = np.array([[1, 0, self.dt, 0, 0, 0],
@@ -185,9 +212,10 @@ class Contact:
                              [0, 0, 0, 0, 0, self.variance]])
 
 
-    def recompute_q(Q_vars):
+    def recompute_q(self, epoch):
         """
         Recompute the values of Q for the Kalman filters in this Contact.
         """
-
-        pass
+        
+        for i in range(0, len(self.filter_bank.filters)):
+            self.filter_bank.filters[i].Q = Q_discrete_white_noise(dim=2, dt=epoch*self.dt, var=self.variance, block_size=3, order_by_dim=False)
