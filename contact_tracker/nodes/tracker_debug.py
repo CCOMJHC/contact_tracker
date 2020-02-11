@@ -511,18 +511,7 @@ class ContactTracker:
 
        
         # Append appropriate prior and measurements to lists here
-        
-        #print('------- ONE -------') # WAY off from the measurements now. 
-        #print(c.filter_bank.x)
-        #print('-------- BEFORE APPEND -------')
-        #print(c.xs)
-
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
-        
-        #print('-------- AFTER APPEND -------')
-        #print(c.xs)
-        #print('----------------------------')
-
         c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
         c.ps.append(c.filter_bank.P)
         c.times.append(epoch)
