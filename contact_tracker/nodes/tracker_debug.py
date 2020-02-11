@@ -74,7 +74,7 @@ class ContactTracker:
             for i in c.zs:
                 m_xs.append(i[0])
                 m_ys.append(i[1])
-        
+            
             for i in c.xs:
                 p_xs.append(i[0])
                 p_ys.append(i[1])
@@ -83,10 +83,10 @@ class ContactTracker:
             all_mys.append(m_ys)
             all_pxs.append(p_xs)
             all_pys.append(p_ys)
-
+        
         for i in range(0, len(all_mxs)):
-            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
-            plt.plot(all_pxs[i], all_pys[i], label='kf ' + str (i) + ' predictions')
+            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='kf' + str(i) + ' measurements', color='y')
+            plt.plot(all_pxs[i], all_pys[i], label='kf' + str (i) + ' predictions')
 
         plt.legend()
         plt.xlabel('x position')
@@ -192,9 +192,9 @@ class ContactTracker:
         detect_info -- the dictionary containing the detect info to be printed
         """
         
-        print('+++++++ DETECT +++++++')
+        rospy.loginfo('+++++++ DETECT +++++++')
         for k, v in detect_info.items():
-            print(k, ': ', v)
+            rospy.loginfo(k, ': ', v)
 
 
     def dump_contacts(self):
@@ -202,9 +202,9 @@ class ContactTracker:
         Print the contents of the all_contacts  dictionary for debugging purposes.
         """
         
-        print('+++++++ CONTACTS +++++++')
+        rospy.loginfo('+++++++ CONTACTS +++++++')
         for k, v in self.all_contacts.items():
-            print(k, ': ', v)
+            rospy.loginfo(k, ': ', v)
 
 
     def populate_detect_info(self, data):
@@ -254,14 +254,110 @@ class ContactTracker:
 
         # Check to see that if one coordinate is not NaN, neither is the other
         if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
-            if DEBUG: print('ERROR: x_pos and y_pos both were not nans...returning')
+            rospy.loginfo('ERROR: x_pos and y_pos both were not nans...returning')
             return {} 
         if ((not math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])) or (math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel']))):
-            if DEBUG: print('ERROR: x_vel and y_vel both were not nans...returning')
+            rospy.loginfo('ERROR: x_vel and y_vel both were not nans...returning')
             return {}
 
         return detect_info
 
+
+    def calculate_bayes_factor(self, K, Z, testfactor):
+        """ 
+        Calculates Bayes Factor to test how consistant
+        the measurement is with the model.
+        
+        Keyword arguments:
+        K -- filterpy.kalman.KalmanFilter object
+        Z -- Measurement vector
+        testfactor -- Scalar factor indiating how many standard deviations
+             outside which the the measurement will be deemed inconsistent
+                    
+        Returns: Log Bayes Factor
+                    
+        The Bayes Factor provides a method to discern which measurements
+        are likely to be of the modeled system or not.  
+        
+        The Bayes Factor tests the relative odds of two models. 
+        In this context it is used to test the odds that a
+        new measurement is statistially consistant with the 
+        current model, or a hypothetical model displaced from it.
+        The displacement is the 'testfactor' x sigma where sigma is
+
+        the uncertainty of the model. 
+        
+        Baysian Forcasting and Dynmaic Models, Second Edition,
+        West and Harrison, 1997, page 394.
+        
+        (6) Following Jeffreys (1961), a log Bayes' factor of 
+        1(-1) indicates evidence in favour of model 0 (1), a
+        value of 2(-2) indicating the evidence to be strong.
+        
+        EXAMPLE:
+        
+        Given a Kalman filter object K, and a new measurement vector, Z,
+        having uncertainty matrix, R, one can calculate the log Bayes Factor 
+        against a hypothetical model displaced two standard deviations 
+        away with the following:
+        
+        K.R = newmeasurementR()
+        logBF = calculateBayesFactor(K,Z,2)
+        
+        If the result is greater than 2, than the hypothesis that the 
+        measurement is more consistant with the alternate model can be rejected
+        and the measurement can be integrated into the model under test.
+        
+        if logBF > 2:
+            K.update(Z)
+        
+        See:
+        Baysian Forcasting and Dynmaic Models, Second Editio,n
+        West and Harrison, 1997. for more details.
+        """ 
+        
+        # First we calculate the system uncertainty, S, which includes
+        # the uncertainty of the model, P, propagated to the measurement 
+        # time and the uncertaint of the measurement, R.
+        # Note, if K.predict() has already been called, the result of this 
+        # calculation would be available in K.S. Calculating it explicitly
+        # here allows us to delay propagating the model in the event that 
+        # we decide not the include the measurement. 
+        S = np.dot(K.H,np.dot(K.P, K.H.T)) + K.R
+        invS = np.linalg.inv(S)
+        
+        # h will be an offset from the current model providing an alternative 
+        # hypothesis. It is calculated as testfactor * model's uncertainty
+        # prior to incorporating the measurement.
+        h = np.sqrt(np.diag(K.P)) * testfactor
+        
+        # The "likelihood" of the measurement under the existing 
+        # model, and that of an alternative model are calculated as 
+        #
+        #     L = (z - HX).T Hinv(S)H.T (Z - HX)
+        # and 
+        #     L2 = (z - X + h).T Hinv(S)H.T (Z - X + h)
+        #
+        # However care must be taken in the sign of the estimate offset, h to
+        # ensure the model shifts away from the measurement values relative to 
+        # the estimate. This calcualtion is done in piece-meal steps to 
+        # make it more clear and easier to debug. 
+        ZHX0 = Z - np.dot(K.H,K.x)
+        
+        # Here we need to apply a different alternate hypothesis for each
+        # state variable depending on where the measurement falls (< or >)
+        # relative to it. 
+        multiplier = [1 if x < 0 else -1 for x in (Z - np.dot(K.H,K.x))]
+        ZHX1 = np.abs(Z - np.dot(K.H,K.x)) + multiplier * np.dot(K.H,h)
+    
+        log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
+        log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
+        
+        # Calculate te Log Bayes Factor
+        log_BF = log_likelihoodM0 - log_likelihoodM1
+    
+        return log_BF
+    
 
     def check_all_contacts(self, detect_info, new_stamp):
         """
@@ -272,24 +368,38 @@ class ContactTracker:
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
         new_stamp -- the timestamp from the header of the contact we're checking all others against
+
+        Returns:
+        new_stamp -- 
         """
  
         for contact in self.all_contacts:
             c = self.all_contacts[contact]
 
-            '''if DEBUG:
-                print('x measurement: ', detect_info['x_pos'])
-                print('x prediction: ', c.kf.x[0])
-                print('y measurement: ', detect_info['y_pos'])
-                print('y prediction: ', c.kf.x[1])'''
-                       
-            # measurement - prediction < uncertainty_in_measurement + uncertainty_in_prediction
             for kf in c.filter_bank.filters:
-                if ((abs(detect_info['x_pos'] - kf.x[0]) < (detect_info['pos_covar'][0] + kf.R[0][0])) and 
-                    (abs(detect_info['y_pos'] - kf.x[1]) < (detect_info['pos_covar'][7] + kf.R[1][1]))):
-                     return c.id
+                # TODO: Should we return after a single update is performed, or can all 
+                # filters in the bank potentially be updated? I need to know this before 
+                # I potentially begin refactoring. If this is a one-time thing per detect
+                # message, I can potantially return an id for the particular filter that 
+                # is a BayesFactor match. otherwise, we can keep the per-contact ids and  
+                # call c.filter_bank.update(Z). 
+                
+                Z = c.get_z(detect_info) 
+                
+                kf.R = np.array([[100, 0, 0, 0, 0, 0],
+                                 [0, 100, 0, 0, 0, 0],
+                                 [0, 0, 2, 0, 0, 0],
+                                 [0, 0, 0, 2, 0, 0],
+                                 [0, 0, 0, 0, 2, 0],
+                                 [0, 0, 0, 0, 0, 2]])
+                logBF = self.calculate_bayes_factor(kf, Z, 2)
+                print(logBF) 
+                if logBF > 2: 
+                    return c.id
                  
-        # No appropriate contacts were found, so return the stamp of the Detect message being checked
+        # No appropriate contacts were found, so return the stamp of 
+        # the Detect message being checked
+        print('no matching contacts')
         return new_stamp
 
         
@@ -303,7 +413,7 @@ class ContactTracker:
             time_between_now_and_last_measured = (rospy.get_rostime() - cur_contact.last_measured).to_sec()
 
             if time_between_now_and_last_measured > self.max_stale_contact_time:
-                if DEBUG: print('deleting stale Contact from dictionary')
+                rospy.loginfo('deleting stale Contact from dictionary')
                 del self.all_contacts[cur_contact]
 
 
@@ -359,15 +469,15 @@ class ContactTracker:
             c = contact_tracker.contact.Contact(detect_info, all_filters, self.variance, data.header.stamp)
             
             if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating first-order Kalman filter with position but without velocity')
+                rospy.loginfo('Instantiating Kalman filters with position but without velocity')
                 c.init_kf_with_position_only()
             
             elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating first-order Kalman filter with velocity but without position')
+                rospy.loginfo('Instantiating Kalman filters with velocity but without position')
                 c.init_kf_with_velocity_only()
             
             elif not math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating first-order Kalman filter with velocity and position')
+                rospy.loginfo('Instantiating Kalman filters with velocity and position')
                 c.init_kf_with_position_and_velocity()
             
             c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
@@ -396,16 +506,23 @@ class ContactTracker:
         # Incorporate with filters in the filter_bank 
         c = self.all_contacts[contact_id]
         c.filter_bank.predict()
-        
-        if math.isnan(detect_info['x_pos']):
-            c.filter_bank.update(([[c.last_xpos, c.last_ypos], [c.info['x_vel'], c.info['y_vel']]]))
-        elif math.isnan(detect_info['x_vel']):
-            c.filter_bank.update((c.info['x_pos'], c.info['y_pos'], c.last_xvel, c.last_yvel, 0, 0))
-        else:
-            c.filter_bank.update((c.info['x_pos'], c.info['y_pos'], c.info['x_vel'], c.info['y_vel'], 0, 0))
-        
+        Z = c.get_z(detect_info) 
+        c.filter_bank.update(Z)
+
+       
         # Append appropriate prior and measurements to lists here
-        c.xs.append(c.filter_bank.x)
+        
+        #print('------- ONE -------') # WAY off from the measurements now. 
+        #print(c.filter_bank.x)
+        #print('-------- BEFORE APPEND -------')
+        #print(c.xs)
+
+        c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
+        
+        #print('-------- AFTER APPEND -------')
+        #print(c.xs)
+        #print('----------------------------')
+
         c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
         c.ps.append(c.filter_bank.P)
         c.times.append(epoch)

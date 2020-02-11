@@ -9,6 +9,7 @@
 
 import rospy
 import numpy as np
+import math
 
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
@@ -215,7 +216,33 @@ class Contact:
     def recompute_q(self, epoch):
         """
         Recompute the values of Q for the Kalman filters in this Contact.
+
+        Keyword arguments:
+        epoch -- time since this contact was last incorporated into the filter
         """
         
         for i in range(0, len(self.filter_bank.filters)):
             self.filter_bank.filters[i].Q = Q_discrete_white_noise(dim=2, dt=epoch*self.dt, var=self.variance, block_size=3, order_by_dim=False)
+
+
+    def get_z(self, detect_info):
+        """
+        Get the measurement vector based on information sent in the detect message.
+
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info being checked
+
+        Returns:
+        Z -- the measurement vector for the detect message being examined
+        """
+        
+        Z = np.zeros(self.filter_bank.x.shape)
+        
+        if math.isnan(detect_info['x_pos']):
+            Z = [self.last_xpos, self.last_ypos, self.info['x_vel'], self.info['y_vel'], 0, 0]
+        elif math.isnan(detect_info['x_vel']):
+            Z = [self.info['x_pos'], self.info['y_pos'], self.last_xvel, self.last_yvel, 0, 0]
+        else:
+            Z = [self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], 0, 0]
+        
+        return Z 
