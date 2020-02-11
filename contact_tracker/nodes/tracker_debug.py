@@ -85,8 +85,8 @@ class ContactTracker:
             all_pys.append(p_ys)
         
         for i in range(0, len(all_mxs)):
-            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='kf' + str(i) + ' measurements', color='y')
-            plt.plot(all_pxs[i], all_pys[i], label='kf' + str (i) + ' predictions')
+            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='contact' + str(i) + ' measurements', color='y')
+            plt.plot(all_pxs[i], all_pys[i], label='contact' + str (i) + ' predictions')
 
         plt.legend()
         plt.xlabel('x position')
@@ -192,9 +192,9 @@ class ContactTracker:
         detect_info -- the dictionary containing the detect info to be printed
         """
         
-        rospy.loginfo('+++++++ DETECT +++++++')
+        print('+++++++ DETECT +++++++')
         for k, v in detect_info.items():
-            rospy.loginfo(k, ': ', v)
+            print(k, ': ', v)
 
 
     def dump_contacts(self):
@@ -202,9 +202,9 @@ class ContactTracker:
         Print the contents of the all_contacts  dictionary for debugging purposes.
         """
         
-        rospy.loginfo('+++++++ CONTACTS +++++++')
+        print('+++++++ CONTACTS +++++++')
         for k, v in self.all_contacts.items():
-            rospy.loginfo(k, ': ', v)
+            print(k, ': ', v)
 
 
     def populate_detect_info(self, data):
@@ -255,108 +255,14 @@ class ContactTracker:
         # Check to see that if one coordinate is not NaN, neither is the other
         if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
             rospy.loginfo('ERROR: x_pos and y_pos both were not nans...returning')
-            return {} 
+            detect_info = {} 
         if ((not math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])) or (math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel']))):
             rospy.loginfo('ERROR: x_vel and y_vel both were not nans...returning')
-            return {}
-
+            detect_info = {}
+        
         return detect_info
 
 
-    def calculate_bayes_factor(self, K, Z, testfactor):
-        """ 
-        Calculates Bayes Factor to test how consistant
-        the measurement is with the model.
-        
-        Keyword arguments:
-        K -- filterpy.kalman.KalmanFilter object
-        Z -- Measurement vector
-        testfactor -- Scalar factor indiating how many standard deviations
-             outside which the the measurement will be deemed inconsistent
-                    
-        Returns: Log Bayes Factor
-                    
-        The Bayes Factor provides a method to discern which measurements
-        are likely to be of the modeled system or not.  
-        
-        The Bayes Factor tests the relative odds of two models. 
-        In this context it is used to test the odds that a
-        new measurement is statistially consistant with the 
-        current model, or a hypothetical model displaced from it.
-        The displacement is the 'testfactor' x sigma where sigma is
-
-        the uncertainty of the model. 
-        
-        Baysian Forcasting and Dynmaic Models, Second Edition,
-        West and Harrison, 1997, page 394.
-        
-        (6) Following Jeffreys (1961), a log Bayes' factor of 
-        1(-1) indicates evidence in favour of model 0 (1), a
-        value of 2(-2) indicating the evidence to be strong.
-        
-        EXAMPLE:
-        
-        Given a Kalman filter object K, and a new measurement vector, Z,
-        having uncertainty matrix, R, one can calculate the log Bayes Factor 
-        against a hypothetical model displaced two standard deviations 
-        away with the following:
-        
-        K.R = newmeasurementR()
-        logBF = calculateBayesFactor(K,Z,2)
-        
-        If the result is greater than 2, than the hypothesis that the 
-        measurement is more consistant with the alternate model can be rejected
-        and the measurement can be integrated into the model under test.
-        
-        if logBF > 2:
-            K.update(Z)
-        
-        See:
-        Baysian Forcasting and Dynmaic Models, Second Editio,n
-        West and Harrison, 1997. for more details.
-        """ 
-        
-        # First we calculate the system uncertainty, S, which includes
-        # the uncertainty of the model, P, propagated to the measurement 
-        # time and the uncertaint of the measurement, R.
-        # Note, if K.predict() has already been called, the result of this 
-        # calculation would be available in K.S. Calculating it explicitly
-        # here allows us to delay propagating the model in the event that 
-        # we decide not the include the measurement. 
-        S = np.dot(K.H,np.dot(K.P, K.H.T)) + K.R
-        invS = np.linalg.inv(S)
-        
-        # h will be an offset from the current model providing an alternative 
-        # hypothesis. It is calculated as testfactor * model's uncertainty
-        # prior to incorporating the measurement.
-        h = np.sqrt(np.diag(K.P)) * testfactor
-        
-        # The "likelihood" of the measurement under the existing 
-        # model, and that of an alternative model are calculated as 
-        #
-        #     L = (z - HX).T Hinv(S)H.T (Z - HX)
-        # and 
-        #     L2 = (z - X + h).T Hinv(S)H.T (Z - X + h)
-        #
-        # However care must be taken in the sign of the estimate offset, h to
-        # ensure the model shifts away from the measurement values relative to 
-        # the estimate. This calcualtion is done in piece-meal steps to 
-        # make it more clear and easier to debug. 
-        ZHX0 = Z - np.dot(K.H,K.x)
-        
-        # Here we need to apply a different alternate hypothesis for each
-        # state variable depending on where the measurement falls (< or >)
-        # relative to it. 
-        multiplier = [1 if x < 0 else -1 for x in (Z - np.dot(K.H,K.x))]
-        ZHX1 = np.abs(Z - np.dot(K.H,K.x)) + multiplier * np.dot(K.H,h)
-    
-        log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
-        log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
-        
-        # Calculate te Log Bayes Factor
-        log_BF = log_likelihoodM0 - log_likelihoodM1
-    
-        return log_BF
     
 
     def check_all_contacts(self, detect_info, new_stamp):
@@ -372,36 +278,51 @@ class ContactTracker:
         Returns:
         new_stamp -- 
         """
- 
+        
+        contacts_whose_filters_all_have_bf_greater_than_two = []
+        logBFsums = []
+
         for contact in self.all_contacts:
+            logBF = 0
+            logBFsum = 0
+            append_me = True
             c = self.all_contacts[contact]
+            c.set_R(detect_info['pos_covar']) 
+            c.set_Z(detect_info)
 
             for kf in c.filter_bank.filters:
-                # TODO: Should we return after a single update is performed, or can all 
-                # filters in the bank potentially be updated? I need to know this before 
-                # I potentially begin refactoring. If this is a one-time thing per detect
-                # message, I can potantially return an id for the particular filter that 
-                # is a BayesFactor match. otherwise, we can keep the per-contact ids and  
-                # call c.filter_bank.update(Z). 
+                logBF = c.calculate_bayes_factor(kf, 2)
                 
-                Z = c.get_z(detect_info) 
-                
-                kf.R = np.array([[100, 0, 0, 0, 0, 0],
-                                 [0, 100, 0, 0, 0, 0],
-                                 [0, 0, 2, 0, 0, 0],
-                                 [0, 0, 0, 2, 0, 0],
-                                 [0, 0, 0, 0, 2, 0],
-                                 [0, 0, 0, 0, 0, 2]])
-                logBF = self.calculate_bayes_factor(kf, Z, 2)
-                print(logBF) 
-                if logBF > 2: 
-                    return c.id
-                 
-        # No appropriate contacts were found, so return the stamp of 
-        # the Detect message being checked
-        print('no matching contacts')
-        return new_stamp
+                if logBF <= 2 or math.isnan(logBF): 
+                    append_me = False 
+                    break
+                else:
+                    logBFsum += logBF
+            
+            # How do we know when it's time to create a new contact? Is that when the list is 
+            # empty, which indictes that no contact has a Bayes factor close enough to the 
+            # measurement?
+            if append_me:
+                contacts_whose_filters_all_have_bf_greater_than_two.append(c.id) 
+                logBFsums.append(logBFsum)
 
+
+        greatest_logBF = 0
+        #print('logBFsum: ', logBFsum)
+        return_contact_id = new_stamp 
+
+
+        for i in range(0, len(contacts_whose_filters_all_have_bf_greater_than_two)):
+            #print(contacts_whose_filters_all_have_bf_greater_than_two[i], ' ', logBFsums[i])
+ 
+            if logBFsums[i] > greatest_logBF:
+                greatest_logBF = logBFsums[i]
+                return_contact_id = contacts_whose_filters_all_have_bf_greater_than_two[i]
+        
+        #print('using contact ', return_contact_id, ' with sum ', greatest_logBF)
+
+        return return_contact_id 
+ 
         
     def delete_stale_contacts(self):
         """
@@ -436,11 +357,12 @@ class ContactTracker:
         Keyword arguments:
         data -- the Detect message transmitted
         """
-
+        
+        print(data.pose.pose.position.x)
         ########################################################
         ###### VARIABLE INITIALIZATION AND ERROR HANDLING ######
         ########################################################
-         
+        
         # Initialize variables and store in a dictionary.
         detect_info = self.populate_detect_info(data)
         if len(detect_info) == 0: 
@@ -450,9 +372,8 @@ class ContactTracker:
         #  If there are no contacts yet, no need to traverse empty dictionary
         #  Otherwise, we have to check each contact in the dictionary to see if 
         #  it is a potential match for our current Detect message. 
-        if len(self.all_contacts) == 0:
-            contact_id  = data.header.stamp 
-        else:
+        contact_id = data.header.stamp
+        if len(self.all_contacts) > 0:
             contact_id = self.check_all_contacts(detect_info, data.header.stamp)
             
 
@@ -492,7 +413,7 @@ class ContactTracker:
             epoch = (c.last_measured - c.first_measured).to_sec()
             
             c.dt = epoch
-            c.recompute_q(epoch) 
+            c.set_Q(epoch) 
             c.info = detect_info
 
             if not math.isnan(detect_info['x_pos']):
@@ -506,10 +427,8 @@ class ContactTracker:
         # Incorporate with filters in the filter_bank 
         c = self.all_contacts[contact_id]
         c.filter_bank.predict()
-        Z = c.get_z(detect_info) 
-        c.filter_bank.update(Z)
+        c.filter_bank.update(c.Z)
 
-       
         # Append appropriate prior and measurements to lists here
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
         c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
@@ -525,7 +444,7 @@ class ContactTracker:
         Initialize the node and set it to subscribe to the detects topic.
         """
 
-        rospy.init_node('tracker', anonymous=True)
+        rospy.init_node('tracker_debug', anonymous=True)
         srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
         rospy.spin()
