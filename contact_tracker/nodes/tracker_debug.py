@@ -23,7 +23,6 @@ from filterpy.kalman import IMMEstimator
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
 from filterpy.kalman import predict
-from filterpy.common import Q_discrete_white_noise
 from filterpy.stats.stats import plot_covariance
 
 from dynamic_reconfigure.server import Server
@@ -203,8 +202,9 @@ class ContactTracker:
         """
         
         print('+++++++ CONTACTS +++++++')
-        for k, v in self.all_contacts.items():
-            print(k, ': ', v)
+        for k in self.all_contacts.items():
+            print(k)
+        print('++++++++++++++++++++++++')
 
 
     def populate_detect_info(self, data):
@@ -228,8 +228,6 @@ class ContactTracker:
                 'x_vel': float('nan'),
                 'y_pos': float('nan'),
                 'y_vel': float('nan'),
-                'z_pos': float('nan'),
-                'z_vel': float('nan')
                 }
         
         # Assign values only if they are not NaNs
@@ -239,18 +237,11 @@ class ContactTracker:
         if not math.isnan(data.pose.pose.position.y):
             detect_info['y_pos'] = float(data.pose.pose.position.y)
 
-        if not math.isnan(data.pose.pose.position.z):
-            detect_info['z_pos'] = float(data.pose.pose.position.z)
-
         if not math.isnan(data.twist.twist.linear.x):
             detect_info['x_vel'] = float(data.twist.twist.linear.x)
 
         if not math.isnan(data.twist.twist.linear.y):
             detect_info['y_vel'] = float(data.twist.twist.linear.y)
-
-        if not math.isnan(data.twist.twist.linear.z):
-            detect_info['z_vel'] = float(data.twist.twist.linear.z)
-
 
         # Check to see that if one coordinate is not NaN, neither is the other
         if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
@@ -263,9 +254,7 @@ class ContactTracker:
         return detect_info
 
 
-    
-
-    def check_all_contacts(self, detect_info, new_stamp):
+    def check_all_contacts(self, detect_info, data):
         """
         Iterate over every contact in the dictionary and return contact the current Detect is 
         most likely associated with. Otherwise, return the timestamp of the current Detect message
@@ -273,54 +262,43 @@ class ContactTracker:
 
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
-        new_stamp -- the timestamp from the header of the contact we're checking all others against
 
         Returns:
-        new_stamp -- 
+        None if no appropriate contacts are found, otherwise the found contact's id
         """
         
-        contacts_whose_filters_all_have_bf_greater_than_two = []
-        logBFsums = []
+        greatest_logBF = 0
+        return_contact_id = None 
 
+        #print('___________________________')
+        #print('x position: ', detect_info['x_pos'])
+        
         for contact in self.all_contacts:
-            logBF = 0
-            logBFsum = 0
-            append_me = True
+            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
+            # Then update the time stamp for when this contact was last measured so we know not
+            # to remove it anytime soon. Updating Q is also a prerequsite for calculating a contact's
+            # Bayes factor.
             c = self.all_contacts[contact]
-            c.set_R(detect_info['pos_covar']) 
+            c.last_measured = data.header.stamp
+            epoch = (c.last_measured - c.first_measured).to_sec()
+            c.dt = epoch
+            
+            c.set_Q() 
+            c.set_F()
+            c.set_Q()
+            c.set_H(detect_info)
+            c.set_R(detect_info) 
             c.set_Z(detect_info)
 
-            for kf in c.filter_bank.filters:
-                logBF = c.calculate_bayes_factor(kf, 2)
-                
-                if logBF <= 2 or math.isnan(logBF): 
-                    append_me = False 
-                    break
-                else:
-                    logBFsum += logBF
+            logBF1 = c.calculate_bayes_factor(c.filter_bank.filters[0], 2)
+            logBF2 = c.calculate_bayes_factor(c.filter_bank.filters[2], 2)
             
-            # How do we know when it's time to create a new contact? Is that when the list is 
-            # empty, which indictes that no contact has a Bayes factor close enough to the 
-            # measurement?
-            if append_me:
-                contacts_whose_filters_all_have_bf_greater_than_two.append(c.id) 
-                logBFsums.append(logBFsum)
+            if logBF1 > 2 and logBF2 > 2: 
+                if logBF1 + logBF2 > greatest_logBF:
+                    greatest_logBF = logBF1 + logBF2
+                    return_contact_id = c.id
 
-
-        greatest_logBF = 0
-        #print('logBFsum: ', logBFsum)
-        return_contact_id = new_stamp 
-
-
-        for i in range(0, len(contacts_whose_filters_all_have_bf_greater_than_two)):
-            #print(contacts_whose_filters_all_have_bf_greater_than_two[i], ' ', logBFsums[i])
- 
-            if logBFsums[i] > greatest_logBF:
-                greatest_logBF = logBFsums[i]
-                return_contact_id = contacts_whose_filters_all_have_bf_greater_than_two[i]
-        
-        #print('using contact ', return_contact_id, ' with sum ', greatest_logBF)
-
+        #self.dump_contacts()
         return return_contact_id 
  
         
@@ -346,7 +324,6 @@ class ContactTracker:
 
         self.max_stale_contact_time = config['max_stale_contact_time']
         self.initial_velocity = config['initial_velocity']
-        self.variance = config['variance']
         return config
 
 
@@ -358,13 +335,13 @@ class ContactTracker:
         data -- the Detect message transmitted
         """
         
-        print(data.pose.pose.position.x)
         ########################################################
         ###### VARIABLE INITIALIZATION AND ERROR HANDLING ######
         ########################################################
         
         # Initialize variables and store in a dictionary.
         detect_info = self.populate_detect_info(data)
+        
         if len(detect_info) == 0: 
             return
 
@@ -372,9 +349,13 @@ class ContactTracker:
         #  If there are no contacts yet, no need to traverse empty dictionary
         #  Otherwise, we have to check each contact in the dictionary to see if 
         #  it is a potential match for our current Detect message. 
-        contact_id = data.header.stamp
+        contact_id = None 
+        
         if len(self.all_contacts) > 0:
-            contact_id = self.check_all_contacts(detect_info, data.header.stamp)
+            contact_id = self.check_all_contacts(detect_info, data)
+        
+        if contact_id is None:
+           contact_id = data.header.stamp 
             
 
         #######################################################
@@ -382,38 +363,18 @@ class ContactTracker:
         #######################################################
         
         epoch = 0
+        
         if not contact_id in self.all_contacts: 
-          
-            first_order_kf = KalmanFilter(dim_x=6, dim_z=6)
-            second_order_kf = KalmanFilter(dim_x=6, dim_z=6)
+            first_order_kf = KalmanFilter(dim_x=6, dim_z=4)
+            second_order_kf = KalmanFilter(dim_x=6, dim_z=4)
             all_filters = [first_order_kf, second_order_kf]
-            c = contact_tracker.contact.Contact(detect_info, all_filters, self.variance, data.header.stamp)
-            
-            if not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating Kalman filters with position but without velocity')
-                c.init_kf_with_position_only()
-            
-            elif math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating Kalman filters with velocity but without position')
-                c.init_kf_with_velocity_only()
-            
-            elif not math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['x_vel']):
-                rospy.loginfo('Instantiating Kalman filters with velocity and position')
-                c.init_kf_with_position_and_velocity()
-            
+            c = contact_tracker.contact.Contact(detect_info, all_filters, data.header.stamp)
+            c.init_filters()
             c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
             self.all_contacts[data.header.stamp] = c
 
         else:
-            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
-            # Then update the time stamp for when this contact was last measured so we know not
-            # to remove it anytime soon. 
             c = self.all_contacts[contact_id]
-            c.last_measured = data.header.stamp
-            epoch = (c.last_measured - c.first_measured).to_sec()
-            
-            c.dt = epoch
-            c.set_Q(epoch) 
             c.info = detect_info
 
             if not math.isnan(detect_info['x_pos']):
