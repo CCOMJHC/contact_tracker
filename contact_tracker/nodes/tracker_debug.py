@@ -271,9 +271,6 @@ class ContactTracker:
         greatest_logBF = 0
         return_contact_id = None 
 
-        #print('___________________________')
-        #print('x position: ', detect_info['x_pos'])
-
         for contact in self.all_contacts:
             # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
             # Then update the time stamp for when this contact was last measured so we know not
@@ -282,6 +279,7 @@ class ContactTracker:
             c = self.all_contacts[contact]
             c.last_measured = data.header.stamp
             epoch = (c.last_measured - c.first_measured).to_sec()
+            if epoch < 0: print(epoch)
             c.dt = epoch
             c.set_Z(detect_info)
           
@@ -292,19 +290,23 @@ class ContactTracker:
                 kf.set_R(c, detect_info) 
                 kf.set_bayes_factor(c, 2)
             
+            print(c.filter_bank.filters[0].P)
+            print(c.filter_bank.filters[1].P)
             logBF1 = c.filter_bank.filters[0].get_bayes_factor()
             logBF2 = c.filter_bank.filters[1].get_bayes_factor()
             
             # Should this be the abs value?
-            logBF1 = abs(logBF1)
-            logBF2 = abs(logBF2)
+            logBF1 = logBF1
+            logBF2 = logBF2
+            #print(logBF1)
+            #print(logBF2)
 
             if logBF1 > 2 and logBF2 > 2: 
                 if logBF1 + logBF2 > greatest_logBF:
                     greatest_logBF = logBF1 + logBF2
                     return_contact_id = c.id
 
-        #self.dump_contacts()
+        #print(return_contact_id)
         return return_contact_id 
  
         

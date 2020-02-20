@@ -99,9 +99,7 @@ class ExtendedKalmanFilter(KalmanFilter):
         # here allows us to delay propagating the model in the event that
         # we decide not the include the measurement.
         S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
-        #print(S)
-        invS = S
-        #invS = np.linalg.inv(S) # Error is occurring because it's the same transposed.
+        invS = np.linalg.inv(S) # Error is occurring because it's the same transposed.
 
         # h will be an offset from the current model providing an alternative
         # hypothesis. It is calculated as testfactor * model's uncertainty
@@ -109,7 +107,7 @@ class ExtendedKalmanFilter(KalmanFilter):
         
         # This errors out whenever there's a negative value in the diagonal
         #print(np.diag(self.P))
-        h = np.sqrt(np.diag(abs(self.P))) * testfactor
+        h = np.sqrt(np.diag(self.P)) * testfactor
 
         # The "likelihood" of the measurement under the existing
         # model, and that of an alternative model are calculated as
@@ -167,21 +165,21 @@ class ExtendedKalmanFilter(KalmanFilter):
         for kf in contact.filter_bank.filters:
             if kf.filter_order == 'first':
                 kf.F = np.array([
-                    [.1, .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
-                    [.0, .1, .0, contact.dt, .0, (0.5*contact.dt)**2],
-                    [.0, .0, .1, .0, contact.dt, .0],
-                    [.0, .0, .0, .1, .0, contact.dt],
+                    [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
+                    [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],
+                    [.0, .0, 1., .0, contact.dt, .0],
+                    [.0, .0, .0, 1., .0, contact.dt],
                     [.0, .0, .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0]])
                 
             elif kf.filter_order == 'second':
                 kf.F = np.array([
-                    [.1, .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
-                    [.0, .1, .0, contact.dt, .0, (0.5*contact.dt)**2],
-                    [.0, .0, .1, .0, contact.dt, .0],
-                    [.0, .0, .0, .1, .0, contact.dt],
-                    [.0, .0, .0, .0, .1, .0],
-                    [.0, .0, .0, .0, .0, .1]])
+                    [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
+                    [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],
+                    [.0, .0, 1., .0, contact.dt, .0],
+                    [.0, .0, .0, 1., .0, contact.dt],
+                    [.0, .0, .0, .0, 1., .0],
+                    [.0, .0, .0, .0, .0, 1.]])
 
 
     def set_H(self, contact, detect_info):
@@ -192,16 +190,16 @@ class ExtendedKalmanFilter(KalmanFilter):
         for kf in contact.filter_bank.filters:
             if math.isnan(detect_info['x_vel']):
                 kf.H = np.array([
-                    [.1, .0, .0, .0, .0, .0],
-                    [.0, .1, .0, .0, .0, .0],
+                    [1., .0, .0, .0, .0, .0],
+                    [.0, 1., .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0]])
             else:
                 kf.H = np.array([
-                    [.1, .0, .0, .0, .0, .0],
-                    [.0, .1, .0, .0, .0, .0],
-                    [.0, .0, .1, .0, .0, .0],
-                    [.0, .0, .0, .1, .0, .0]])
+                    [1., .0, .0, .0, .0, .0],
+                    [.0, 1., .0, .0, .0, .0],
+                    [.0, .0, 1., .0, .0, .0],
+                    [.0, .0, .0, 1., .0, .0]])
 
 
     def set_R(self, contact, detect_info):
@@ -218,10 +216,8 @@ class ExtendedKalmanFilter(KalmanFilter):
 
         for kf in contact.filter_bank.filters:
             if math.isnan(detect_info['x_vel']):
-                kf.R = np.array([[pc[0], .0, .0, .0],
-                                 [.0, pc[7], .0, .0],
-                                 [.0, .0, .0, .0],
-                                 [.0, .0, .0, .0]])
+                kf.R = np.array([[pc[0], .0],
+                                 [.0, pc[7]]])
             
             else:
                 kf.R = np.array([[pc[0], .0, .0, .0],

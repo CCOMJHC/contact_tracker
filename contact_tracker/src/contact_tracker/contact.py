@@ -71,10 +71,10 @@ class Contact:
                 print('Instantiating ', self.all_filters[i].filter_order, ' Kalman filter with position but without velocity')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], .0, .0, .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [.1, .0, self.dt, .0, (0.5*self.dt)**2, .0],
-                    [.0, .1, .0, self.dt, .0, (0.5*self.dt)**2],
-                    [.0, .0, .1, .0, self.dt, .0],
-                    [.0, .0, .0, .1, .0, self.dt],
+                    [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],
+                    [.0, 1., .0, self.dt, .0, (0.5*self.dt)**2],
+                    [.0, .0, 1., .0, self.dt, .0],
+                    [.0, .0, .0, 1., .0, self.dt],
                     [.0, .0, .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0]])
 
@@ -90,19 +90,19 @@ class Contact:
                 print('Instantiating ', self.all_filters[i].filter_order, ' order Kalman filter with velocity and position')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [.1, .0, self.dt, .0, (0.5*self.dt)**2, .0],
-                    [.0, .1, .0, self.dt, .0, (0.5*self.dt)**2],
-                    [.0, .0, .1, .0, self.dt, .0],
-                    [.0, .0, .0, .1, .0, self.dt],
-                    [.0, .0, .0, .0, .1, .0],
-                    [.0, .0, .0, .0, .0, .1]])
+                    [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],
+                    [.0, 1., .0, self.dt, .0, (0.5*self.dt)**2],
+                    [.0, .0, 1., .0, self.dt, .0],
+                    [.0, .0, .0, 1., .0, self.dt],
+                    [.0, .0, .0, .0, 1., .0],
+                    [.0, .0, .0, .0, .0, 1.]])
 
                 self.all_filters[i].Q = Q_discrete_white_noise(dim=3, var=self.dt, block_size=2, order_by_dim=False) 
 
             # Define the state covariance matrix
             self.all_filters[i].P = np.array([
-                [25.0*(self.info['pos_covar'][0]**2), .0, .0, .0, .0, .0],
-                [.0, 25.0*(self.info['pos_covar'][6]**2), .0, .0, .0, .0],
+                [25.0*self.info['pos_covar'][0], .0, .0, .0, .0, .0],
+                [.0, 25.0*self.info['pos_covar'][6], .0, .0, .0, .0],
                 [.0, .0, 1.0**2, .0, .0, .0],
                 [.0, .0, .0, 1.0**2, .0, .0],
                 [.0, .0, .0, .0, 0.5**2, .0],
