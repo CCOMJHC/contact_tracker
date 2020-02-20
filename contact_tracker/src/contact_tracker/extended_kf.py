@@ -32,7 +32,6 @@ class ExtendedKalmanFilter(KalmanFilter):
         KalmanFilter.__init__(self, dim_x, dim_z)
         self.filter_order = filter_order 
         self.bayes_factor = 0
-        self.Z = None
 
     
     def get_bayes_factor(self):
@@ -42,7 +41,7 @@ class ExtendedKalmanFilter(KalmanFilter):
         return self.bayes_factor
 
 
-    def set_bayes_factor(self, testfactor):
+    def set_bayes_factor(self, contact, testfactor):
         """ 
         Calculates Bayes Factor to test how consistant
         the measurement is with the model.
@@ -99,13 +98,18 @@ class ExtendedKalmanFilter(KalmanFilter):
         # calculation would be available in K.S. Calculating it explicitly
         # here allows us to delay propagating the model in the event that
         # we decide not the include the measurement.
-        S = np.dot(self.H,np.dot(self.P, self.H.T)) + self.R
-        invS = np.linalg.inv(S)
+        S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
+        #print(S)
+        invS = S
+        #invS = np.linalg.inv(S) # Error is occurring because it's the same transposed.
 
         # h will be an offset from the current model providing an alternative
         # hypothesis. It is calculated as testfactor * model's uncertainty
         # prior to incorporating the measurement.
-        h = np.sqrt(np.diag(self.P)) * testfactor
+        
+        # This errors out whenever there's a negative value in the diagonal
+        #print(np.diag(self.P))
+        h = np.sqrt(np.diag(abs(self.P))) * testfactor
 
         # The "likelihood" of the measurement under the existing
         # model, and that of an alternative model are calculated as
@@ -118,13 +122,13 @@ class ExtendedKalmanFilter(KalmanFilter):
         # ensure the model shifts away from the measurement values relative to
         # the estimate. This calcualtion is done in piece-meal steps to
         # make it more clear and easier to debug.
-        ZHX0 = self.Z - np.dot(self.H, self.x)
+        ZHX0 = contact.Z - np.dot(self.H, self.x)
 
         # Here we need to apply a different alternate hypothesis for each
         # state variable depending on where the measurement falls (< or >)
         # relative to it.
-        multiplier = [1 if x < 0 else -1 for x in (self.Z - np.dot(self.H, self.x))]
-        ZHX1 = np.abs(self.Z - np.dot(self.H, self.x)) + multiplier * np.dot(self.H, h)
+        multiplier = [1 if x < 0 else -1 for x in (contact.Z - np.dot(self.H, self.x))]
+        ZHX1 = np.abs(contact.Z - np.dot(self.H, self.x)) + multiplier * np.dot(self.H, h)
 
         log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
         log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
@@ -163,8 +167,8 @@ class ExtendedKalmanFilter(KalmanFilter):
         for kf in contact.filter_bank.filters:
             if kf.filter_order == 'first':
                 kf.F = np.array([
-                    [.1, .0, contact.dt, .0, ((.1/.2)*contact.dt)**2, .0],
-                    [.0, .1, .0, contact.dt, .0, ((.1/.2)*contact.dt)**2],
+                    [.1, .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
+                    [.0, .1, .0, contact.dt, .0, (0.5*contact.dt)**2],
                     [.0, .0, .1, .0, contact.dt, .0],
                     [.0, .0, .0, .1, .0, contact.dt],
                     [.0, .0, .0, .0, .0, .0],
@@ -172,8 +176,8 @@ class ExtendedKalmanFilter(KalmanFilter):
                 
             elif kf.filter_order == 'second':
                 kf.F = np.array([
-                    [.1, .0, contact.dt, .0, ((.1/.2)*contact.dt)**2, .0],
-                    [.0, .1, .0, contact.dt, .0, ((.1/.2)*contact.dt)**2],
+                    [.1, .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
+                    [.0, .1, .0, contact.dt, .0, (0.5*contact.dt)**2],
                     [.0, .0, .1, .0, contact.dt, .0],
                     [.0, .0, .0, .1, .0, contact.dt],
                     [.0, .0, .0, .0, .1, .0],
@@ -210,31 +214,21 @@ class ExtendedKalmanFilter(KalmanFilter):
         """
         
         pc = detect_info['pos_covar']
+        tc = detect_info['twist_covar']
 
         for kf in contact.filter_bank.filters:
             if math.isnan(detect_info['x_vel']):
-                kf.R = np.zeros([4, 4])
+                kf.R = np.array([[pc[0], .0, .0, .0],
+                                 [.0, pc[7], .0, .0],
+                                 [.0, .0, .0, .0],
+                                 [.0, .0, .0, .0]])
             
             else:
-                kf.R = np.zeros([4, 4])
+                kf.R = np.array([[pc[0], .0, .0, .0],
+                                 [.0, pc[7], .0, .0],
+                                 [.0, .0, tc[0], .0],
+                                 [.0, .0, .0, tc[7]]])
                 
 
-    def set_Z(self, contact, detect_info):
-        """
-        Set the measurement vector based on information sent in the detect message.
+       
 
-        Keyword arguments:
-        detect_info -- the dictionary containing the detect info being checked
-        """
-        
-        if math.isnan(detect_info['x_pos']):
-            self.Z = [contact.last_xpos, contact.last_ypos, contact.info['x_vel'], contact.info['y_vel']]
-        
-        elif math.isnan(detect_info['x_vel']):
-            self.Z = [contact.info['x_pos'], contact.info['y_pos'], contact.last_xvel, contact.last_yvel]
-        
-        else:
-            self.Z = [contact.info['x_pos'], contact.info['y_pos'], contact.info['x_vel'], contact.info['y_vel']]
-        
-
- 

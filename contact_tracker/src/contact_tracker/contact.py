@@ -58,7 +58,8 @@ class Contact:
         # Other important variables
         self.info = detect_info
         self.id = timestamp 
-        
+        self.Z = None
+
 
     def init_filters(self):
         """
@@ -67,11 +68,11 @@ class Contact:
         
         for i in range(0, len(self.all_filters)):
             if not math.isnan(self.info['x_pos']) and math.isnan(self.info['x_vel']):
-                rospy.loginfo('Instantiating Kalman filters with position but without velocity')
+                print('Instantiating ', self.all_filters[i].filter_order, ' Kalman filter with position but without velocity')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], .0, .0, .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [.1, .0, self.dt, .0, ((.1/.2)*self.dt)**2, .0],
-                    [.0, .1, .0, self.dt, .0, ((.1/.2)*self.dt)**2],
+                    [.1, .0, self.dt, .0, (0.5*self.dt)**2, .0],
+                    [.0, .1, .0, self.dt, .0, (0.5*self.dt)**2],
                     [.0, .0, .1, .0, self.dt, .0],
                     [.0, .0, .0, .1, .0, self.dt],
                     [.0, .0, .0, .0, .0, .0],
@@ -86,11 +87,11 @@ class Contact:
                 self.all_filters[i].Q = empty_array
             
             elif not math.isnan(self.info['x_pos']) and not math.isnan(self.info['x_vel']):
-                rospy.loginfo('Instantiating Kalman filters with velocity and position')
+                print('Instantiating ', self.all_filters[i].filter_order, ' order Kalman filter with velocity and position')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [.1, .0, self.dt, .0, ((.1/.2)*self.dt)**2, .0],
-                    [.0, .1, .0, self.dt, .0, ((.1/.2)*self.dt)**2],
+                    [.1, .0, self.dt, .0, (0.5*self.dt)**2, .0],
+                    [.0, .1, .0, self.dt, .0, (0.5*self.dt)**2],
                     [.0, .0, .1, .0, self.dt, .0],
                     [.0, .0, .0, .1, .0, self.dt],
                     [.0, .0, .0, .0, .1, .0],
@@ -101,14 +102,31 @@ class Contact:
             # Define the state covariance matrix
             self.all_filters[i].P = np.array([
                 [25.0*(self.info['pos_covar'][0]**2), .0, .0, .0, .0, .0],
-                [.0, 25.0*(self.info['pos_covar'][7]**2), .0, .0, .0, .0],
+                [.0, 25.0*(self.info['pos_covar'][6]**2), .0, .0, .0, .0],
                 [.0, .0, 1.0**2, .0, .0, .0],
                 [.0, .0, .0, 1.0**2, .0, .0],
                 [.0, .0, .0, .0, 0.5**2, .0],
                 [.0, .0, .0, .0, .0, 0.5**2]])
 
 
+    def set_Z(self, detect_info):
+        """
+        Set the measurement vector based on information sent in the detect message.
 
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info being checked
+        """
+        
+        if math.isnan(detect_info['x_pos']):
+            self.Z = [self.last_xpos, self.last_ypos, self.info['x_vel'], self.info['y_vel']]
+        
+        elif math.isnan(detect_info['x_vel']):
+            self.Z = [self.info['x_pos'], self.info['y_pos'], self.last_xvel, self.last_yvel]
+        
+        else:
+            self.Z = [self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]
+  
+ 
 
 
 
