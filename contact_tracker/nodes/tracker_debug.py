@@ -17,6 +17,7 @@ from numpy import zeros
 import matplotlib.pyplot as plt
 
 import contact_tracker.contact
+import contact_tracker.extended_kf
 from marine_msgs.msg import Detect
 
 from filterpy.kalman import IMMEstimator
@@ -32,7 +33,7 @@ DEBUG = True
 
 class ContactTracker:
     """
-    Class to create custom Kalman filter.
+    Class to create custom contact tracker.
     """
 
 
@@ -283,16 +284,17 @@ class ContactTracker:
             epoch = (c.last_measured - c.first_measured).to_sec()
             c.dt = epoch
             
-            c.set_Q() 
-            c.set_F()
-            c.set_Q()
-            c.set_H(detect_info)
-            c.set_R(detect_info) 
-            c.set_Z(detect_info)
-
-            logBF1 = c.calculate_bayes_factor(c.filter_bank.filters[0], 2)
-            logBF2 = c.calculate_bayes_factor(c.filter_bank.filters[2], 2)
+            for kf in c.filter_bank.filters:
+                kf.set_Q(c) 
+                kf.set_F(c)
+                kf.set_H(c, detect_info)
+                kf.set_R(c, detect_info) 
+                kf.set_Z(c, detect_info)
+                kf.set_bayes_factor(2)
             
+            logBF1 = c.filter_bank.filters[0].get_bayes_factor()
+            logBF2 = c.filter_bank.filters[1].get_bayes_factor()
+
             if logBF1 > 2 and logBF2 > 2: 
                 if logBF1 + logBF2 > greatest_logBF:
                     greatest_logBF = logBF1 + logBF2
@@ -365,8 +367,8 @@ class ContactTracker:
         epoch = 0
         
         if not contact_id in self.all_contacts: 
-            first_order_kf = KalmanFilter(dim_x=6, dim_z=4)
-            second_order_kf = KalmanFilter(dim_x=6, dim_z=4)
+            first_order_kf = contact_tracker.extended_kf.ExtendedKalmanFilter(dim_x=6, dim_z=4, filter_order='first')
+            second_order_kf = contact_tracker.extended_kf.ExtendedKalmanFilter(dim_x=6, dim_z=4, filter_order='second')
             all_filters = [first_order_kf, second_order_kf]
             c = contact_tracker.contact.Contact(detect_info, all_filters, data.header.stamp)
             c.init_filters()
@@ -385,10 +387,10 @@ class ContactTracker:
                 c.last_xvel = detect_info['x_vel']
                 c.last_yvel = detect_info['y_vel']
         
-        # Incorporate with filters in the filter_bank 
-        c = self.all_contacts[contact_id]
-        c.filter_bank.predict()
-        c.filter_bank.update(c.Z)
+            # Incorporate with filters in the filter_bank 
+            c = self.all_contacts[contact_id]
+            c.filter_bank.predict()
+            c.filter_bank.update(c.Z)
 
         # Append appropriate prior and measurements to lists here
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
