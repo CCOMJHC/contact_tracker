@@ -34,8 +34,8 @@ class Contact:
 
         # Variables for the IMM Estimator
         self.mu = np.array([0.3, 0.7])
-        self.M = np.array([[0.97, 0.03],
-                           [0.05, 0.95]])
+        self.M = np.array([[0.3, 0.7],
+                           [0.95, 0.05]])
         # all_filters is purely for initializing the filters
         self.all_filters = all_filters 
         self.filter_bank = None
@@ -68,7 +68,7 @@ class Contact:
         
         for i in range(0, len(self.all_filters)):
             if not math.isnan(self.info['x_pos']) and math.isnan(self.info['x_vel']):
-                print('Instantiating ', self.all_filters[i].filter_order, ' Kalman filter with position but without velocity')
+                print('Instantiating ', self.all_filters[i].filter_type, ' Kalman filter with position but without velocity')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], .0, .0, .0, .0]).T
                 self.all_filters[i].F = np.array([
                     [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],
@@ -87,7 +87,7 @@ class Contact:
                 self.all_filters[i].Q = empty_array
             
             elif not math.isnan(self.info['x_pos']) and not math.isnan(self.info['x_vel']):
-                print('Instantiating ', self.all_filters[i].filter_order, ' order Kalman filter with velocity and position')
+                print('Instantiating ', self.all_filters[i].filter_type, ' order Kalman filter with velocity and position')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], .0, .0]).T
                 self.all_filters[i].F = np.array([
                     [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],

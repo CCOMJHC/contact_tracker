@@ -16,21 +16,21 @@ from numpy import zeros
 
 DEBUG = True 
 
-class ExtendedKalmanFilter(KalmanFilter):
+class ContactKalmanFilter(KalmanFilter):
     """
     Class to create custom Kalman filter.
     """
 
 
-    def __init__(self, dim_x, dim_z, filter_order):
+    def __init__(self, dim_x, dim_z, filter_type):
         """
         Define the constructor.
 
-        filter_order -- order of the filter being created
+        filter_type -- type of the filter being created
         """
         
         KalmanFilter.__init__(self, dim_x, dim_z)
-        self.filter_order = filter_order 
+        self.filter_type = filter_type 
         self.bayes_factor = 0
 
     
@@ -143,7 +143,7 @@ class ExtendedKalmanFilter(KalmanFilter):
         """
         
         for kf in contact.filter_bank.filters:
-            if kf.filter_order == 'first': 
+            if kf.filter_type == 'first': 
                 # All Q matrices have to have matching dimensions (6x6 in our case).
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
@@ -152,7 +152,7 @@ class ExtendedKalmanFilter(KalmanFilter):
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 kf.Q = empty_array
             
-            elif kf.filter_order == 'second':
+            elif kf.filter_type == 'second':
                 kf.Q = Q_discrete_white_noise(dim=3, var=contact.dt, block_size=2, order_by_dim=False) 
 
 
@@ -163,7 +163,7 @@ class ExtendedKalmanFilter(KalmanFilter):
         """
 
         for kf in contact.filter_bank.filters:
-            if kf.filter_order == 'first':
+            if kf.filter_type == 'first':
                 kf.F = np.array([
                     [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
                     [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],
@@ -172,7 +172,7 @@ class ExtendedKalmanFilter(KalmanFilter):
                     [.0, .0, .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0]])
                 
-            elif kf.filter_order == 'second':
+            elif kf.filter_type == 'second':
                 kf.F = np.array([
                     [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
                     [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],

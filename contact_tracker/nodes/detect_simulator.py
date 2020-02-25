@@ -23,6 +23,7 @@ class DetectSimulator():
         self.x_vel = args.xvel
         self.y_vel = args.yvel
         self.direction = args.direction
+        self.return_enabled = args.return_enabled
         self.niter = 1 
         self.step = 1 
         self.xs = []
@@ -117,33 +118,32 @@ class DetectSimulator():
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         
         while self.niter < 500:
-            d = rospy.Duration(randn())
+            d = rospy.Duration(1)
             msg = Detect()
             msg.header.stamp = rospy.get_rostime()
             coin_flip = 1 
-            msg.pose.covariance = [50, 0, 0, 0, 0, 0,
-                                   0, 50, 0, 0, 0, 0,
-                                   0, 0, 0, 0, 0, 0,
-                                   0, 0, 0, 0, 0, 0,
-                                   0, 0, 0, 0, 0, 0,
-                                   0, 0, 0, 0, 0, 0]
+            msg.pose.covariance = [10., 0., 0., 0., 0., 0.,
+                                   0., 10., 0., 0., 0., 0.,
+                                   0., 0., 2., 0., 0., 0.,
+                                   0., 0., 0., 2., 0, 0.,
+                                   0., 0., 0., 0., .2, 0.,
+                                   0., 0., 0., 0., 0., .2]
             
             # Generate message with position and velocity
             if coin_flip > 0:    
                 self.move()
                  
                 if self.niter % 250 == 0:
-                    print('turning')
                     self.turn()
 
                 msg.pose.pose.position.x = self.x_pos 
                 msg.pose.pose.position.y = self.y_pos 
                 msg.twist.twist.linear.x = 1.0
                 msg.twist.twist.linear.y = 1.0
-                #print(msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x)
+                print(msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
             
             # Generate message with position and not velocity
-            elif coin_flip <= 0 and coin_flip >= -1: 
+            elif coin_flip < 0 and coin_flip >= -1: 
                 self.move()
                 
                 if self.niter % 100 == 0:
@@ -154,14 +154,18 @@ class DetectSimulator():
                 #print(msg.header.stamp, ': Generating message with position and not velocity: ', msg.pose.pose.position.x)
 
             # Generate message with velocity and not position
-            else:
+            elif coin_flip == 0:
                 msg.pose.pose.position.x = float('nan') 
                 msg.pose.pose.position.y = float('nan') 
-                msg.twist.twist.linear.x = x_vel + randn() 
-                msg.twist.twist.linear.y = x_vel + randn() 
+                msg.twist.twist.linear.x = self.x_vel + randn() 
+                msg.twist.twist.linear.y = self.x_vel + randn() 
                 #print(msg.header.stamp, ': Generating message with velocity and not position: ', msg.pose.pose.position.x)
             
             self.niter += 1
+            
+            if self.return_enabled:
+                raw_input()
+            
             self.pub.publish(msg)
             rospy.sleep(d)
 
@@ -175,6 +179,7 @@ def main():
     arg_parser.add_argument('-yvel', type=float, help='initial y velocity of the object')
     arg_parser.add_argument('-step', type=float, help='step to increment positions each iteration')
     arg_parser.add_argument('-direction', type=str, choices=['n', 's', 'e', 'w', 'nw', 'ne', 'se', 'sw'], help='direction the simulated object should move')
+    arg_parser.add_argument('-return_enabled', type=bool, help='generate Detect message only when the return key is pressed')
     arg_parser.add_argument('-show_plot', type=bool, help='plot the course the simulation followed')
     arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='sim_plot')
     args = arg_parser.parse_args(rospy.myargv()[1:])

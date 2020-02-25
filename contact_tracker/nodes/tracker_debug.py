@@ -17,7 +17,7 @@ from numpy import zeros
 import matplotlib.pyplot as plt
 
 import contact_tracker.contact
-import contact_tracker.extended_kf
+import contact_tracker.contact_kf
 from marine_msgs.msg import Detect
 
 from filterpy.kalman import IMMEstimator
@@ -255,6 +255,69 @@ class ContactTracker:
         return detect_info
 
 
+    def check_all_contacts_by_distance(self, detect_info, data):
+        """
+        +++ FOR DEBUGGING PURPOSES ONLY +++
+        Iterate over every contact in the dictionary and return contact the current Detect is 
+        most likely associated with. Otherwise, return the timestamp of the current Detect message
+        as the new hash_key for the new Contact that will be made.
+
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info to be checked
+
+        Returns:
+        None if no appropriate contacts are found, otherwise the found contact's id
+        """
+        
+        greatest_pred = 0
+        return_contact_id = None 
+
+        for contact in self.all_contacts:
+            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
+            # Then update the time stamp for when this contact was last measured so we know not
+            # to remove it anytime soon. Updating Q is also a prerequsite for calculating a contact's
+            # Bayes factor.
+            c = self.all_contacts[contact]
+            c.last_measured = data.header.stamp
+            epoch = (c.last_measured - c.first_measured).to_sec()
+            c.dt = epoch
+            c.set_Z(detect_info)
+          
+            for kf in c.filter_bank.filters:
+                kf.set_Q(c) 
+                kf.set_F(c)
+                kf.set_H(c, detect_info)
+                kf.set_R(c, detect_info) 
+                kf.set_bayes_factor(c, 2)
+           
+            # get the distance between the measurement and the prediction for each filter
+            side1a = abs(detect_info['x_pos'] - c.filter_bank.filters[0].x[0])
+            side1b = abs(detect_info['y_pos'] - c.filter_bank.filters[0].x[1])
+            side2a = abs(detect_info['x_pos'] - c.filter_bank.filters[1].x[0])
+            side2b = abs(detect_info['y_pos'] - c.filter_bank.filters[1].x[1])
+
+            H1 = math.sqrt(side1a**2 + side1b**2)
+            H2 = math.sqrt(side2a**2 + side2b**2)
+            
+            print('________________')
+            print('measurement: ', detect_info['x_pos'], '\tprediction: '
+                    , c.filter_bank.filters[0].x[0], '\tpred1: ', H1)
+            print('measurement: ', detect_info['x_pos'], '\tprediction: '
+                    , c.filter_bank.filters[1].x[0], '\tpred2: ', H2)
+
+            # If both filters have predictions within 10 of the measurement, incorporate 
+            # the measurement into the filter.
+            if H1 <= 10 and H2 <= 10: 
+                if H1 + H2 > greatest_pred:
+                    greatest_pred = H1 + H2 
+                    return_contact_id = c.id
+
+        #print(return_contact_id)
+        return return_contact_id 
+ 
+ 
+
+
     def check_all_contacts(self, detect_info, data):
         """
         Iterate over every contact in the dictionary and return contact the current Detect is 
@@ -290,16 +353,15 @@ class ContactTracker:
                 kf.set_R(c, detect_info) 
                 kf.set_bayes_factor(c, 2)
             
-            print(c.filter_bank.filters[0].P)
-            print(c.filter_bank.filters[1].P)
+            #print(c.filter_bank.filters[0].P)
+            #print(c.filter_bank.filters[1].P)
             logBF1 = c.filter_bank.filters[0].get_bayes_factor()
             logBF2 = c.filter_bank.filters[1].get_bayes_factor()
             
-            # Should this be the abs value?
             logBF1 = logBF1
             logBF2 = logBF2
-            #print(logBF1)
-            #print(logBF2)
+            print(logBF1)
+            print(logBF2)
 
             if logBF1 > 2 and logBF2 > 2: 
                 if logBF1 + logBF2 > greatest_logBF:
@@ -360,7 +422,7 @@ class ContactTracker:
         contact_id = None 
         
         if len(self.all_contacts) > 0:
-            contact_id = self.check_all_contacts(detect_info, data)
+            contact_id = self.check_all_contacts_by_distance(detect_info, data)
         
         if contact_id is None:
            contact_id = data.header.stamp 
@@ -373,8 +435,8 @@ class ContactTracker:
         epoch = 0
         
         if not contact_id in self.all_contacts: 
-            first_order_kf = contact_tracker.extended_kf.ExtendedKalmanFilter(dim_x=6, dim_z=4, filter_order='first')
-            second_order_kf = contact_tracker.extended_kf.ExtendedKalmanFilter(dim_x=6, dim_z=4, filter_order='second')
+            first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
+            second_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='second')
             all_filters = [first_order_kf, second_order_kf]
             c = contact_tracker.contact.Contact(detect_info, all_filters, data.header.stamp)
             c.init_filters()
@@ -395,8 +457,18 @@ class ContactTracker:
         
             # Incorporate with filters in the filter_bank 
             c = self.all_contacts[contact_id]
+            
+            '''print('______________')
+            print('BEFORE CALLING PREDICT AND UPDATE')
+            for kf in c.filter_bank.filters:
+                print(kf)'''
+            
             c.filter_bank.predict()
             c.filter_bank.update(c.Z)
+            
+            '''print('AFTER CALLING PREDICT AND UPDATE')
+            for kf in c.filter_bank.filters:
+                print(kf)'''
 
         # Append appropriate prior and measurements to lists here
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
