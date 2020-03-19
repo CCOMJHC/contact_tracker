@@ -333,8 +333,8 @@ class ContactTracker:
             # Then update the time stamp for when this contact was last measured so we know not
             # to remove it anytime soon. 
             c = self.all_contacts[contact]
+            epoch = (data.header.stamp - c.last_measured).to_sec()
             c.last_measured = data.header.stamp
-            epoch = (c.last_measured - c.first_measured).to_sec()
             c.dt = epoch
             c.set_Z(detect_info)
           
@@ -389,8 +389,13 @@ class ContactTracker:
             # to remove it anytime soon. Updating Q is also a prerequsite for calculating a contact's
             # Bayes factor.
             c = self.all_contacts[contact]
+            epoch = (data.header.stamp - c.last_measured).to_sec()
+            print('___________________________________')
+            print('current measurement: ', data.header.stamp)
+            print('last measured: ', c.last_measured)
+            print('epoch: ', epoch)
+            print('___________________________________')
             c.last_measured = data.header.stamp
-            epoch = (c.last_measured - c.first_measured).to_sec()
             c.dt = epoch
             c.set_Z(detect_info)
           
