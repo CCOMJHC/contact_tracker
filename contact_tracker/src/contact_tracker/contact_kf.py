@@ -31,14 +31,42 @@ class ContactKalmanFilter(KalmanFilter):
         
         KalmanFilter.__init__(self, dim_x, dim_z)
         self.filter_type = filter_type 
-        self.bayes_factor = 0
+        self.bayes_factor = 0.0
+        self.ll = 0.0
 
-    
+
+    def get_log_likelihood(self):
+        """
+        Returns: Log Likelihood 
+        """
+        return self.ll
+
+     
     def get_bayes_factor(self):
         """
         Returns: Log Bayes Factor
         """
         return self.bayes_factor
+
+
+    def set_log_likelihood(self, contact):
+        """
+        Calculates the log likelihood of the 
+        contact given the measurement. 
+
+        Keyword arguments:
+        contact -- the contact object for which to 
+             retrieve the likelihood given the current 
+             measurement. 
+        """
+
+        S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
+        invS = np.linalg.inv(S) 
+
+        ZHX0 = contact.Z - np.dot(self.H, self.x) 
+
+        log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
+        self.ll = log_likelihoodM0
 
 
     def set_bayes_factor(self, contact, testfactor):
@@ -120,18 +148,36 @@ class ContactKalmanFilter(KalmanFilter):
         # ensure the model shifts away from the measurement values relative to
         # the estimate. This calcualtion is done in piece-meal steps to
         # make it more clear and easier to debug.
-        ZHX0 = contact.Z - np.dot(self.H, self.x)
+        ZHX0 = contact.Z - np.dot(self.H, self.x) # shouldn't this be abs?
+        '''print('Z: ', contact.Z)
+        print('x: ', self.x)'''
 
         # Here we need to apply a different alternate hypothesis for each
         # state variable depending on where the measurement falls (< or >)
         # relative to it.
-        multiplier = [1 if x < 0 else -1 for x in (contact.Z - np.dot(self.H, self.x))]
+        multiplier = [1.0 if x < 0 else -1.0 for x in (contact.Z - np.dot(self.H, self.x))]
         ZHX1 = np.abs(contact.Z - np.dot(self.H, self.x)) + multiplier * np.dot(self.H, h)
 
         log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
         log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
 
-        # Calculate te Log Bayes Factor
+        # Calculate the Log Bayes Factor
+        '''print('_________________________________________')
+        print('invS: ', invS)
+        print('+++++++++++++++++++++++++++++++++++++++++')
+        print('ZHX0: ', ZHX0)
+        print('invS * ZHX0: ', np.dot(invS, ZHX0))
+        print('np.dot(ZHX0, ans): ', np.dot(ZHX0.T, np.dot(invS, ZHX0))) 
+        print('-0.5*ans: ', np.dot(ZHX0.T, np.dot(invS, ZHX0)))
+        print('log_likelihoodM0: ', log_likelihoodM0)
+        print('+++++++++++++++++++++++++++++++++++++++++')
+        print('ZHX1: ', ZHX1)
+        print('invS * ZHX1: ', np.dot(invS, ZHX1))
+        print('np.dot(ZHX1, ans): ', np.dot(ZHX1.T, np.dot(invS, ZHX1)))  
+        print('-0.5*ans: ', np.dot(ZHX1.T, np.dot(invS, ZHX1))) 
+        print('loglikelihoodM1: ', log_likelihoodM1)
+        print('+++++++++++++++++++++++++++++++++++++++++')
+        '''
         log_BF = log_likelihoodM0 - log_likelihoodM1
 
         self.bayes_factor = log_BF

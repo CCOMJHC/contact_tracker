@@ -26,6 +26,7 @@ class DetectSimulator():
         self.return_enabled = args.return_enabled
         self.niter = 1 
         self.step = 1 
+        self.name = args.name
         self.xs = []
         self.ys = []
 
@@ -117,11 +118,12 @@ class DetectSimulator():
         
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         
-        while self.niter < 500 and not rospy.is_shutdown():
+        while self.niter < 500:
             d = rospy.Duration(1)
             msg = Detect()
             msg.header.stamp = rospy.get_rostime()
-            coin_flip = 1 
+            coin_flip = 1
+            msg.sensor_id = self.name
             msg.pose.covariance = [10., 0., 0., 0., 0., 0.,
                                    0., 10., 0., 0., 0., 0.,
                                    0., 0., 2., 0., 0., 0.,
@@ -131,7 +133,8 @@ class DetectSimulator():
             
             # Generate message with position and velocity
             if coin_flip > 0:    
-                self.move()
+                if self.direction != 'none':
+                    self.move()
                  
                 if self.niter % 250 == 0:
                     self.turn()
@@ -144,7 +147,8 @@ class DetectSimulator():
             
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1: 
-                self.move()
+                if self.direction != 'none':
+                    self.move()
                 
                 if self.niter % 100 == 0:
                     self.turn()
@@ -178,10 +182,11 @@ def main():
     arg_parser.add_argument('-xvel', type=float, help='initial x velocity of the object')
     arg_parser.add_argument('-yvel', type=float, help='initial y velocity of the object')
     arg_parser.add_argument('-step', type=float, help='step to increment positions each iteration')
-    arg_parser.add_argument('-direction', type=str, choices=['n', 's', 'e', 'w', 'nw', 'ne', 'se', 'sw'], help='direction the simulated object should move')
+    arg_parser.add_argument('-direction', type=str, choices=['n', 's', 'e', 'w', 'nw', 'ne', 'se', 'sw', 'none'], help='direction the simulated object should move')
     arg_parser.add_argument('-return_enabled', type=bool, help='generate Detect message only when the return key is pressed')
     arg_parser.add_argument('-show_plot', type=bool, help='plot the course the simulation followed')
     arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='sim_plot')
+    arg_parser.add_argument('-name', type=str, help='identifier for this node')
     args = arg_parser.parse_args(rospy.myargv()[1:])
 
     rospy.init_node('detect_simulator')
@@ -198,7 +203,8 @@ def main():
             rospy.loginfo('Plotting the course of the simulation')
             simulation.plot_course(args.o)
 
-    except rospy.ROSInterruptException:
+    except:
+        rospy.ROSInterruptException
         rospy.loginfo('Falied to initialize the simulation')
         pass
 

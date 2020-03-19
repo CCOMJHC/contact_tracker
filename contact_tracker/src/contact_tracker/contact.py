@@ -36,6 +36,9 @@ class Contact:
         self.mu = np.array([0.3, 0.7])
         self.M = np.array([[0.3, 0.7],
                            [0.95, 0.05]])
+        #self.mu = np.array([0.5, 0.5])
+        #self.M = np.array([[0.5, 0.5],
+        #                   [0.5, 0.5]])
         # all_filters is purely for initializing the filters
         self.all_filters = all_filters 
         self.filter_bank = None

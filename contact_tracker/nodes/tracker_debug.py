@@ -269,14 +269,13 @@ class ContactTracker:
         None if no appropriate contacts are found, otherwise the found contact's id
         """
         
-        greatest_pred = 0
+        greatest_pred = float('inf')
         return_contact_id = None 
 
         for contact in self.all_contacts:
             # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
             # Then update the time stamp for when this contact was last measured so we know not
-            # to remove it anytime soon. Updating Q is also a prerequsite for calculating a contact's
-            # Bayes factor.
+            # to remove it anytime soon. 
             c = self.all_contacts[contact]
             c.last_measured = data.header.stamp
             epoch = (c.last_measured - c.first_measured).to_sec()
@@ -288,8 +287,12 @@ class ContactTracker:
                 kf.set_F(c)
                 kf.set_H(c, detect_info)
                 kf.set_R(c, detect_info) 
-                kf.set_bayes_factor(c, 2)
-           
+                print('sensor_id: ', detect_info['sensor_id'])
+                print('filter type: ', kf.filter_type)
+                print('contact id: ', c.id)
+                print('log likeihood :', kf.calculate_log_likelihood(c))
+                print('________________')  
+
             # get the distance between the measurement and the prediction for each filter
             side1a = abs(detect_info['x_pos'] - c.filter_bank.filters[0].x[0])
             side1b = abs(detect_info['y_pos'] - c.filter_bank.filters[0].x[1])
@@ -299,26 +302,72 @@ class ContactTracker:
             H1 = math.sqrt(side1a**2 + side1b**2)
             H2 = math.sqrt(side2a**2 + side2b**2)
             
-            print('________________')
-            print('measurement: ', detect_info['x_pos'], '\tprediction: '
-                    , c.filter_bank.filters[0].x[0], '\tpred1: ', H1)
-            print('measurement: ', detect_info['x_pos'], '\tprediction: '
-                    , c.filter_bank.filters[1].x[0], '\tpred2: ', H2)
-
             # If both filters have predictions within 10 of the measurement, incorporate 
             # the measurement into the filter.
             if H1 <= 10 and H2 <= 10: 
-                if H1 + H2 > greatest_pred:
+                if H1 + H2 <= greatest_pred:
                     greatest_pred = H1 + H2 
                     return_contact_id = c.id
 
-        #print(return_contact_id)
         return return_contact_id 
  
  
+    def check_all_contacts_by_likelihood(self, detect_info, data):
+        """
+        Iterate over every contact in the dictionary and return contact the current Detect is 
+        most likely associated with. Otherwise, return the timestamp of the current Detect message
+        as the new hash_key for the new Contact that will be made.
 
+        Keyword arguments:
+        detect_info -- the dictionary containing the detect info to be checked
 
-    def check_all_contacts(self, detect_info, data):
+        Returns:
+        None if no appropriate contacts are found, otherwise the found contact's id
+        """
+        
+        greatest_likelihood = 0
+        return_contact_id = None 
+
+        for contact in self.all_contacts:
+            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
+            # Then update the time stamp for when this contact was last measured so we know not
+            # to remove it anytime soon. 
+            c = self.all_contacts[contact]
+            c.last_measured = data.header.stamp
+            epoch = (c.last_measured - c.first_measured).to_sec()
+            c.dt = epoch
+            c.set_Z(detect_info)
+          
+            for kf in c.filter_bank.filters:
+                kf.set_Q(c) 
+                kf.set_F(c)
+                kf.set_H(c, detect_info)
+                kf.set_R(c, detect_info) 
+                
+            c.filter_bank.predict()
+            
+            for kf in c.filter_bank.filters:
+                kf.set_log_likelihood(c)
+                print('sensor_id: ', detect_info['sensor_id'])
+                print('filter type: ', kf.filter_type)
+                print('contact id: ', c.id)
+                print('likelihood :', kf.get_log_likelihood())
+                print('________________')  
+
+              
+            L1 = c.filter_bank.filters[0].get_log_likelihood()
+            L2 = c.filter_bank.filters[1].get_log_likelihood()
+            
+            # Not sure about this condition
+            if L1 / L2 > 0.5: 
+                if L1 / L2 > greatest_likelihood:
+                    greatest_likelihood = L1 / L2
+                    return_contact_id = c.id
+
+        return return_contact_id 
+ 
+
+    def check_all_contacts_by_BF(self, detect_info, data):
         """
         Iterate over every contact in the dictionary and return contact the current Detect is 
         most likely associated with. Otherwise, return the timestamp of the current Detect message
@@ -342,7 +391,6 @@ class ContactTracker:
             c = self.all_contacts[contact]
             c.last_measured = data.header.stamp
             epoch = (c.last_measured - c.first_measured).to_sec()
-            if epoch < 0: print(epoch)
             c.dt = epoch
             c.set_Z(detect_info)
           
@@ -351,24 +399,26 @@ class ContactTracker:
                 kf.set_F(c)
                 kf.set_H(c, detect_info)
                 kf.set_R(c, detect_info) 
-                kf.set_bayes_factor(c, 2)
+                
+            c.filter_bank.predict()
             
-            #print(c.filter_bank.filters[0].P)
-            #print(c.filter_bank.filters[1].P)
+            for kf in c.filter_bank.filters:
+                kf.set_bayes_factor(c, 2.0)
+                print('sensor_id: ', detect_info['sensor_id'])
+                print('filter type: ', kf.filter_type)
+                print('contact id: ', c.id)
+                print('BF :', kf.get_bayes_factor())
+                print('________________')  
+
+              
             logBF1 = c.filter_bank.filters[0].get_bayes_factor()
             logBF2 = c.filter_bank.filters[1].get_bayes_factor()
             
-            logBF1 = logBF1
-            logBF2 = logBF2
-            print(logBF1)
-            print(logBF2)
-
             if logBF1 > 2 and logBF2 > 2: 
                 if logBF1 + logBF2 > greatest_logBF:
                     greatest_logBF = logBF1 + logBF2
                     return_contact_id = c.id
 
-        #print(return_contact_id)
         return return_contact_id 
  
         
@@ -422,7 +472,7 @@ class ContactTracker:
         contact_id = None 
         
         if len(self.all_contacts) > 0:
-            contact_id = self.check_all_contacts_by_distance(detect_info, data)
+            contact_id = self.check_all_contacts_by_likelihood(detect_info, data)
         
         if contact_id is None:
            contact_id = data.header.stamp 
@@ -457,18 +507,7 @@ class ContactTracker:
         
             # Incorporate with filters in the filter_bank 
             c = self.all_contacts[contact_id]
-            
-            '''print('______________')
-            print('BEFORE CALLING PREDICT AND UPDATE')
-            for kf in c.filter_bank.filters:
-                print(kf)'''
-            
-            c.filter_bank.predict()
             c.filter_bank.update(c.Z)
-            
-            '''print('AFTER CALLING PREDICT AND UPDATE')
-            for kf in c.filter_bank.filters:
-                print(kf)'''
 
         # Append appropriate prior and measurements to lists here
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
