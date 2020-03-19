@@ -85,7 +85,7 @@ class Contact:
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
                 empty_array = np.zeros([6, 6])
-                noise = Q_discrete_white_nosie(dim=2, var=self.dt, block_size=2, order_by_dim=False) 
+                noise = Q_discrete_white_noise(dim=2, var=self.dt, block_size=2, order_by_dim=False) 
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 self.all_filters[i].Q = empty_array
             
