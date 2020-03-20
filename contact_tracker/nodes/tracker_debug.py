@@ -5,7 +5,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Date last modified: 02/04/2020
+# Date last modified: 02/20/2020
 
 import math
 import time
@@ -40,10 +40,6 @@ class ContactTracker:
     def __init__(self):
         """
         Define the constructor.
-
-        max_time -- amount of time that must ellapse before an item is deleted from all_contacts
-        dt -- time step for the Kalman filters
-        initial_velocity -- velocity at the start of the program
         """
 
         self.all_contacts = {}
@@ -51,11 +47,11 @@ class ContactTracker:
 
     def plot_x_vs_y(self, output_path):
         """
-        Visualize results of the Kalman filter by plotting the measurements against the 
-        predictions of the Kalman filter.
+        Plot the measurement's x and y positions 
+        alongside the prediction's x and y positions.
 
         Keyword arguments:
-        output_path -- The path that the plot will be saved to
+        output_path -- path that the plot will be saved to
         """
         
         all_mxs = []
@@ -98,11 +94,12 @@ class ContactTracker:
 
     def plot_x_vs_time(self, output_path):
         """
-        Visualize results of the Kalman filter by plotting the measurements against the 
-        predictions of the Kalman filter.
+        Plot the measurement's x position at each time unit 
+        alongside the prediction's x position at each time 
+        unit.
         
         Keyword arguments:
-        output_path -- The path that the plot will be saved to
+        output_path -- path that the plot will be saved to
         """
 
         all_mxs = []
@@ -138,11 +135,11 @@ class ContactTracker:
 
     def plot_ellipses(self, output_path):
         """
-        Visualize results of the Kalman filter by plotting the measurements against the 
-        predictions of the Kalman filter.
+        Plot the covariance ellipses of the predictions alongside the 
+        measurements. 
         
         Keyword arguments:
-        output_path -- The path that the plot will be saved to
+        output_path -- path that the plot will be saved to
         """
 
         all_pxs = []
@@ -199,7 +196,7 @@ class ContactTracker:
 
     def dump_contacts(self):
         """
-        Print the contents of the all_contacts  dictionary for debugging purposes.
+        Print the contents of the all_contacts dictionary for debugging purposes.
         """
         
         print('+++++++ CONTACTS +++++++')
@@ -257,13 +254,16 @@ class ContactTracker:
 
     def check_all_contacts_by_distance(self, detect_info, data):
         """
-        +++ FOR DEBUGGING PURPOSES ONLY +++
-        Iterate over every contact in the dictionary and return contact the current Detect is 
-        most likely associated with. Otherwise, return the timestamp of the current Detect message
-        as the new hash_key for the new Contact that will be made.
+        FOR DEBUGGING PURPOSES 
+        Iterate over every contact in the dictionary and return the contact 
+        the current detect is most likely associated with by checking Euclidean 
+        distance between the prediction and the measurement. If no contact 
+        is asociated with this detect, return the timestamp of the current detect 
+        message as the new hash_key for the new contact that will be made.
 
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
+        data -- data from the detect message that was just transmitted
 
         Returns:
         None if no appropriate contacts are found, otherwise the found contact's id
@@ -273,13 +273,13 @@ class ContactTracker:
         return_contact_id = None 
 
         for contact in self.all_contacts:
-            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
-            # Then update the time stamp for when this contact was last measured so we know not
-            # to remove it anytime soon. 
             c = self.all_contacts[contact]
+            # Recompute the value for dt, so we can use it to update this Contact's 
+            # KalmanFilter's Q(s).
+            c.dt = (data.header.stamp - c.last_measured).to_sec()
+            # Update the last_measured field for this contact so we know not to 
+            # remove it from all_contacts anytime soon. 
             c.last_measured = data.header.stamp
-            epoch = (c.last_measured - c.first_measured).to_sec()
-            c.dt = epoch
             c.set_Z(detect_info)
           
             for kf in c.filter_bank.filters:
@@ -287,13 +287,16 @@ class ContactTracker:
                 kf.set_F(c)
                 kf.set_H(c, detect_info)
                 kf.set_R(c, detect_info) 
-                print('sensor_id: ', detect_info['sensor_id'])
-                print('filter type: ', kf.filter_type)
-                print('contact id: ', c.id)
-                print('log likeihood :', kf.calculate_log_likelihood(c))
-                print('________________')  
+                
+                if DEBUG:
+                    print('sensor_id: ', detect_info['sensor_id'])
+                    print('filter type: ', kf.filter_type)
+                    print('contact id: ', c.id)
+                    print('________________')  
 
-            # get the distance between the measurement and the prediction for each filter
+            c.filter_bank.predict()
+    
+            # Get the distance between the measurement and the prediction for each filter.
             side1a = abs(detect_info['x_pos'] - c.filter_bank.filters[0].x[0])
             side1b = abs(detect_info['y_pos'] - c.filter_bank.filters[0].x[1])
             side2a = abs(detect_info['x_pos'] - c.filter_bank.filters[1].x[0])
@@ -314,12 +317,16 @@ class ContactTracker:
  
     def check_all_contacts_by_likelihood(self, detect_info, data):
         """
-        Iterate over every contact in the dictionary and return contact the current Detect is 
-        most likely associated with. Otherwise, return the timestamp of the current Detect message
-        as the new hash_key for the new Contact that will be made.
+        FOR DEBUGGING PURPOSES 
+        Iterate over every contact in the dictionary and return the contact 
+        the current detect is most likely associated with by checking log  
+        likilehood of each Kalman filter in the contact. If no contact 
+        is asociated with this detect, return the timestamp of the current detect 
+        message as the new hash_key for the new contact that will be made.
 
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
+        data -- data from the detect message that was just transmitted
 
         Returns:
         None if no appropriate contacts are found, otherwise the found contact's id
@@ -329,15 +336,15 @@ class ContactTracker:
         return_contact_id = None 
 
         for contact in self.all_contacts:
-            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
-            # Then update the time stamp for when this contact was last measured so we know not
-            # to remove it anytime soon. 
             c = self.all_contacts[contact]
-            epoch = (data.header.stamp - c.last_measured).to_sec()
+            # Recompute the value for dt, so we can use it to update this Contact's 
+            # KalmanFilter's Q(s).
+            c.dt = (data.header.stamp - c.last_measured).to_sec()
+            # Update the last_measured field for this contact so we know not to 
+            # remove it from all_contacts anytime soon. 
             c.last_measured = data.header.stamp
-            c.dt = epoch
             c.set_Z(detect_info)
-          
+            
             for kf in c.filter_bank.filters:
                 kf.set_Q(c) 
                 kf.set_F(c)
@@ -348,13 +355,14 @@ class ContactTracker:
             
             for kf in c.filter_bank.filters:
                 kf.set_log_likelihood(c)
-                print('sensor_id: ', detect_info['sensor_id'])
-                print('filter type: ', kf.filter_type)
-                print('contact id: ', c.id)
-                print('likelihood :', kf.get_log_likelihood())
-                print('________________')  
 
-              
+                if DEBUG:
+                    print('sensor_id: ', detect_info['sensor_id'])
+                    print('filter type: ', kf.filter_type)
+                    print('contact id: ', c.id)
+                    print('likelihood :', kf.get_log_likelihood())
+                    print('________________')  
+
             L1 = c.filter_bank.filters[0].get_log_likelihood()
             L2 = c.filter_bank.filters[1].get_log_likelihood()
             
@@ -369,12 +377,15 @@ class ContactTracker:
 
     def check_all_contacts_by_BF(self, detect_info, data):
         """
-        Iterate over every contact in the dictionary and return contact the current Detect is 
-        most likely associated with. Otherwise, return the timestamp of the current Detect message
-        as the new hash_key for the new Contact that will be made.
+        Iterate over every contact in the dictionary and return the contact 
+        the current detect is most likely associated with by checking the  
+        Bayes factor of each Kalman filter in the contact. If no contact 
+        is asociated with this detect, return the timestamp of the current detect 
+        message as the new hash_key for the new contact that will be made.
 
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to be checked
+        data -- data from the detect message that was just transmitted
 
         Returns:
         None if no appropriate contacts are found, otherwise the found contact's id
@@ -384,21 +395,15 @@ class ContactTracker:
         return_contact_id = None 
 
         for contact in self.all_contacts:
-            # Recompute the value for dt, and use it to update this Contact's KalmanFilter's Q(s).
-            # Then update the time stamp for when this contact was last measured so we know not
-            # to remove it anytime soon. Updating Q is also a prerequsite for calculating a contact's
-            # Bayes factor.
             c = self.all_contacts[contact]
-            epoch = (data.header.stamp - c.last_measured).to_sec()
-            print('___________________________________')
-            print('current measurement: ', data.header.stamp)
-            print('last measured: ', c.last_measured)
-            print('epoch: ', epoch)
-            print('___________________________________')
+            # Recompute the value for dt, so we can use it to update this Contact's 
+            # KalmanFilter's Q(s).
+            c.dt = (data.header.stamp - c.last_measured).to_sec()
+            # Update the last_measured field for this contact so we know not to 
+            # remove it from all_contacts anytime soon. 
             c.last_measured = data.header.stamp
-            c.dt = epoch
             c.set_Z(detect_info)
-          
+           
             for kf in c.filter_bank.filters:
                 kf.set_Q(c) 
                 kf.set_F(c)
@@ -409,13 +414,14 @@ class ContactTracker:
             
             for kf in c.filter_bank.filters:
                 kf.set_bayes_factor(c, 2.0)
-                print('sensor_id: ', detect_info['sensor_id'])
-                print('filter type: ', kf.filter_type)
-                print('contact id: ', c.id)
-                print('BF :', kf.get_bayes_factor())
-                print('________________')  
 
-              
+                if DEBUG:
+                    print('sensor_id: ', detect_info['sensor_id'])
+                    print('filter type: ', kf.filter_type)
+                    print('contact id: ', c.id)
+                    print('BF :', kf.get_bayes_factor())
+                    print('________________')  
+
             logBF1 = c.filter_bank.filters[0].get_bayes_factor()
             logBF2 = c.filter_bank.filters[1].get_bayes_factor()
             
@@ -429,7 +435,7 @@ class ContactTracker:
         
     def delete_stale_contacts(self):
         """
-        Remove items from the dictionary that have not been measured in a while
+        Remove items from the dictionary that have not been measured recently. 
         """
         
         for contact_id in self.all_contacts:
@@ -444,7 +450,7 @@ class ContactTracker:
     def reconfigure_callback(self, config, level):
         """
         Get the parameters from the cfg file and assign them to the member variables of the 
-        KalmanTracker class.
+        ContactTracker class.
         """
 
         self.max_stale_contact_time = config['max_stale_contact_time']
@@ -454,10 +460,10 @@ class ContactTracker:
 
     def callback(self, data):
         """
-        Listen for detects and add to dictionary and filter if not already there.
+        Listen for detects and and incorporates with filters as approprate.
 
         Keyword arguments:
-        data -- the Detect message transmitted
+        data -- data from the detect message that was just transmitted
         """
         
         ########################################################
@@ -466,16 +472,13 @@ class ContactTracker:
         
         # Initialize variables and store in a dictionary.
         detect_info = self.populate_detect_info(data)
-        
         if len(detect_info) == 0: 
             return
 
-        #  Compare new measurement to prediction at same time.
         #  If there are no contacts yet, no need to traverse empty dictionary
         #  Otherwise, we have to check each contact in the dictionary to see if 
-        #  it is a potential match for our current Detect message. 
+        #  it is a potential match for our current detect message. 
         contact_id = None 
-        
         if len(self.all_contacts) > 0:
             contact_id = self.check_all_contacts_by_likelihood(detect_info, data)
         
@@ -486,8 +489,6 @@ class ContactTracker:
         #######################################################
         ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
         #######################################################
-        
-        epoch = 0
         
         if not contact_id in self.all_contacts: 
             first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
@@ -510,18 +511,16 @@ class ContactTracker:
                 c.last_xvel = detect_info['x_vel']
                 c.last_yvel = detect_info['y_vel']
         
-            # Incorporate with filters in the filter_bank 
-            c = self.all_contacts[contact_id]
+            # Incorporate with filters in the filter_bank.
             c.filter_bank.update(c.Z)
 
-        # Append appropriate prior and measurements to lists here
+        # Append appropriate prior and measurements to lists.
         c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
         c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
         c.ps.append(c.filter_bank.P)
-        c.times.append(epoch)
 
-        # Remove items from the dictionary that have not been measured in a while
-        #self.delete_stale_contacts()
+        # Remove items from the dictionary that have not been measured recently. 
+        self.delete_stale_contacts()
 
 
     def run(self, args):

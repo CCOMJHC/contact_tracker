@@ -4,7 +4,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Date last modified: 02/04/2020
+# Date last modified: 03/20/2020
 
 import math
 
@@ -18,7 +18,7 @@ DEBUG = True
 
 class ContactKalmanFilter(KalmanFilter):
     """
-    Class to create custom Kalman filter.
+    Class to create custom ContactKalmanFilter.
     """
 
 
@@ -26,38 +26,37 @@ class ContactKalmanFilter(KalmanFilter):
         """
         Define the constructor.
 
-        filter_type -- type of the filter being created
+        filter_type -- type/order of filter being created
         """
         
         KalmanFilter.__init__(self, dim_x, dim_z)
         self.filter_type = filter_type 
         self.bayes_factor = 0.0
         self.ll = 0.0
+        self.vel_var = 0.3 * 10
+        self.acc_var = 0.1 * 10
 
 
     def get_log_likelihood(self):
         """
-        Returns: Log Likelihood 
+        Returns: Log Likelihood of this filter.
         """
         return self.ll
 
      
     def get_bayes_factor(self):
         """
-        Returns: Log Bayes Factor
+        Returns: Log Bayes Factor of this filter.
         """
         return self.bayes_factor
 
 
     def set_log_likelihood(self, contact):
         """
-        Calculates the log likelihood of the 
-        contact given the measurement. 
+        Calculates the log likelihood of the contact given the measurement. 
 
         Keyword arguments:
-        contact -- the contact object for which to 
-             retrieve the likelihood given the current 
-             measurement. 
+        contact -- the contact object for which to retrieve the likelihood given the current measurement. 
         """
 
         S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
@@ -185,7 +184,10 @@ class ContactKalmanFilter(KalmanFilter):
 
     def set_Q(self, contact):
         """
-        Recompute the value of Q for the Kalman filters in this Contact.
+        Recompute the value of Q for the Kalman filters in this contact.
+
+        Keyword arguments:
+        contact -- contact object for which to recompute Q
         """
         
         for kf in contact.filter_bank.filters:
@@ -194,18 +196,21 @@ class ContactKalmanFilter(KalmanFilter):
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
                 empty_array = np.zeros([6, 6])
-                noise = Q_discrete_white_noise(dim=2, var=contact.dt, block_size=2, order_by_dim=False) 
+                noise = Q_discrete_white_noise(dim=2, var=self.vel_var, dt=contact.dt, block_size=2, order_by_dim=False) 
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 kf.Q = empty_array
             
             elif kf.filter_type == 'second':
-                kf.Q = Q_discrete_white_noise(dim=3, var=contact.dt, block_size=2, order_by_dim=False) 
+                kf.Q = Q_discrete_white_noise(dim=3, var=self.acc_var, dt=contact.dt, block_size=2, order_by_dim=False) 
 
 
     def set_F(self, contact):
         """
         Recompute the value of F (process model matrix) for the Kalman 
         filters in this Contact.
+
+        Keyword arguments:
+        contact -- contact object for which to recompute F 
         """
 
         for kf in contact.filter_bank.filters:
@@ -231,6 +236,9 @@ class ContactKalmanFilter(KalmanFilter):
     def set_H(self, contact, detect_info):
         """
         Recompute the values of H for the Kalman filters in this Contact.
+
+        Keyword arguments:
+        contact -- contact object for which to recompute H 
         """
 
         for kf in contact.filter_bank.filters:
@@ -254,6 +262,7 @@ class ContactKalmanFilter(KalmanFilter):
         a Detect message.
 
         Keyword arguments:
+        contact -- contact object for which to set R 
         detect_info -- the dictionary containing the detect info being checked
         """
         

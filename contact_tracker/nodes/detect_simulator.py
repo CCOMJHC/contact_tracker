@@ -4,7 +4,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Date last modified: 02/04/2020
+# Date last modified: 03/20/2020
 
 import rospy
 import argparse
@@ -35,6 +35,9 @@ class DetectSimulator():
         """
         Plot the track that the Detect messages followed.
         For debugging purposes mainly.
+
+        Keyword arguments:
+        output_path -- path to save the plot produced
         """
         
         plt.plot(self.xs, self.ys, color='b')
@@ -86,7 +89,7 @@ class DetectSimulator():
     def turn(self):
         """
         Turn the object 90 degrees clockwise from its 
-        initial direction
+        initial direction.
         """
 
         if self.direction == 'n':

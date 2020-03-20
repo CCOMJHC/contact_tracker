@@ -4,7 +4,7 @@
 
 # Author: Rachel White
 # University of New Hampshire
-# Last Modified: 02/20/2020
+# Last Modified: 03/20/2020
 
 
 import rospy
@@ -27,8 +27,8 @@ class Contact:
         """
         Define the constructor.
         
-        detect_info -- dictionary containing data from the Detect message being used to create this Contact
-        all_filters -- list containing unique KalmanFilter objects for this specific Contact object
+        detect_info -- dictionary containing data from the detect message being used to create this contact
+        all_filters -- list containing unique KalmanFilter objects for this specific contact object
         timestamp -- header from the detect message 
         """
 
@@ -36,16 +36,15 @@ class Contact:
         self.mu = np.array([0.3, 0.7])
         self.M = np.array([[0.3, 0.7],
                            [0.95, 0.05]])
-        #self.mu = np.array([0.5, 0.5])
-        #self.M = np.array([[0.5, 0.5],
-        #                   [0.5, 0.5]])
+        '''self.mu = np.array([0.5, 0.5])
+        self.M = np.array([[0.5, 0.5],
+                           [0.5, 0.5]])'''
         # all_filters is purely for initializing the filters
         self.all_filters = all_filters 
         self.filter_bank = None
        
         # Variables that keep track of time
         self.dt = 1.0 
-        self.first_measured = timestamp
         self.last_measured = timestamp
         self.last_xpos = .0
         self.last_ypos = .0
@@ -66,7 +65,7 @@ class Contact:
 
     def init_filters(self):
         """
-        Initialize each filter in this Contact's filter bank.
+        Initialize each filter in this contact's filter bank.
         """
         
         for i in range(0, len(self.all_filters)):
@@ -85,7 +84,7 @@ class Contact:
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
                 empty_array = np.zeros([6, 6])
-                noise = Q_discrete_white_noise(dim=2, var=self.dt, block_size=2, order_by_dim=False) 
+                noise = Q_discrete_white_noise(dim=2, dt=self.dt, block_size=2, order_by_dim=False) 
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 self.all_filters[i].Q = empty_array
             
@@ -100,9 +99,9 @@ class Contact:
                     [.0, .0, .0, .0, 1., .0],
                     [.0, .0, .0, .0, .0, 1.]])
 
-                self.all_filters[i].Q = Q_discrete_white_noise(dim=3, var=self.dt, block_size=2, order_by_dim=False) 
+                self.all_filters[i].Q = Q_discrete_white_noise(dim=3, dt=self.dt, block_size=2, order_by_dim=False) 
 
-            # Define the state covariance matrix
+            # Define the state covariance matrix.
             self.all_filters[i].P = np.array([
                 [25.0*self.info['pos_covar'][0], .0, .0, .0, .0, .0],
                 [.0, 25.0*self.info['pos_covar'][6], .0, .0, .0, .0],
