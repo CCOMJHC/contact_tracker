@@ -216,8 +216,8 @@ class ContactKalmanFilter(KalmanFilter):
         for kf in contact.filter_bank.filters:
             if kf.filter_type == 'first':
                 kf.F = np.array([
-                    [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
-                    [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],
+                    [1., .0, contact.dt, .0, 0.5*contact.dt**2, .0],
+                    [.0, 1., .0, contact.dt, .0, 0.5*contact.dt**2],
                     [.0, .0, 1., .0, contact.dt, .0],
                     [.0, .0, .0, 1., .0, contact.dt],
                     [.0, .0, .0, .0, .0, .0],
@@ -225,8 +225,8 @@ class ContactKalmanFilter(KalmanFilter):
                 
             elif kf.filter_type == 'second':
                 kf.F = np.array([
-                    [1., .0, contact.dt, .0, (0.5*contact.dt)**2, .0],
-                    [.0, 1., .0, contact.dt, .0, (0.5*contact.dt)**2],
+                    [1., .0, contact.dt, .0, 0.5*contact.dt**2, .0],
+                    [.0, 1., .0, contact.dt, .0, 0.5*contact.dt**2],
                     [.0, .0, 1., .0, contact.dt, .0],
                     [.0, .0, .0, 1., .0, contact.dt],
                     [.0, .0, .0, .0, 1., .0],

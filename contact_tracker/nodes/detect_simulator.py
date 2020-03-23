@@ -121,7 +121,7 @@ class DetectSimulator():
         
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         
-        while self.niter < 500:
+        while self.niter < 500 and not rospy.is_shutdown():
             d = rospy.Duration(1)
             msg = Detect()
             msg.header.stamp = rospy.get_rostime()
@@ -194,22 +194,21 @@ def main():
 
     rospy.init_node('detect_simulator')
 
-    try:
-        rospy.loginfo('Initializing the simulation')
-        simulation = DetectSimulator(args)
-        rospy.loginfo('Simulation was successfully initialized')
-        rospy.loginfo('Beginning to run the simulation')
-        simulation.run()
-        rospy.loginfo('Simulation was successfully run')
+    rospy.loginfo('Initializing the simulation')
+    simulation = DetectSimulator(args)
+    rospy.loginfo('Simulation was successfully initialized')
+    rospy.loginfo('Beginning to run the simulation')
+    simulation.run()
+    rospy.loginfo('Simulation was successfully run')
 
-        if args.show_plot == True:
-            rospy.loginfo('Plotting the course of the simulation')
-            simulation.plot_course(args.o)
+    if args.show_plot == True:
+        rospy.loginfo('Plotting the course of the simulation')
+        simulation.plot_course(args.o)
 
-    except:
-        rospy.ROSInterruptException
-        rospy.loginfo('Falied to initialize the simulation')
-        pass
+    #except:
+    #    rospy.ROSInterruptException
+    #    rospy.loginfo('Falied to initialize the simulation')
+    #    pass
 
 
 if __name__=='__main__':
