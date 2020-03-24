@@ -61,6 +61,10 @@ class Contact:
         self.info = detect_info
         self.id = timestamp 
         self.Z = None
+        
+        # Process noise model uncertainty. 
+        self.constantVelocity_VAR = 0.5**2
+        self.constantAcceleration_VAR = 0.1**2
 
 
     def init_filters(self):
@@ -73,8 +77,8 @@ class Contact:
                 print('Instantiating ', self.all_filters[i].filter_type, ' Kalman filter with position but without velocity')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], .0, .0, .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],
-                    [.0, 1., .0, self.dt, .0, (0.5*self.dt)**2],
+                    [1., .0, self.dt, .0, 0.5*self.dt**2, .0],
+                    [.0, 1., .0, self.dt, .0, 0.5*self.dt**2],
                     [.0, .0, 1., .0, self.dt, .0],
                     [.0, .0, .0, 1., .0, self.dt],
                     [.0, .0, .0, .0, .0, .0],
@@ -84,7 +88,17 @@ class Contact:
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
                 empty_array = np.zeros([6, 6])
-                noise = Q_discrete_white_noise(dim=2, dt=self.dt, block_size=2, order_by_dim=False) 
+                
+                # And the process noise variance/time is different for first
+                # and second order filters, since the variance here is that of 
+                # a zero velocity and zero velocity acceleration model respectively. 
+                if self.all_filters[i].filter_type == 'first':
+                    noise = Q_discrete_white_noise(dim=2, var = self.constantVelocity_VAR, 
+                                                   dt=self.dt, block_size=2, order_by_dim=False)
+                elif self.all_filters[i].filter_type == 'second':
+                    noise = Q_discrete_white_noise(dim=2, var = self.constantAcceleration_VAR, 
+                                                   dt=self.dt, block_size=2, order_by_dim=False)
+                    
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 self.all_filters[i].Q = empty_array
             
@@ -92,14 +106,22 @@ class Contact:
                 print('Instantiating ', self.all_filters[i].filter_type, ' order Kalman filter with velocity and position')
                 self.all_filters[i].x = np.array([self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel'], .0, .0]).T
                 self.all_filters[i].F = np.array([
-                    [1., .0, self.dt, .0, (0.5*self.dt)**2, .0],
-                    [.0, 1., .0, self.dt, .0, (0.5*self.dt)**2],
+                    [1., .0, self.dt, .0, 0.5*self.dt**2, .0],
+                    [.0, 1., .0, self.dt, .0, 0.5*self.dt**2],
                     [.0, .0, 1., .0, self.dt, .0],
                     [.0, .0, .0, 1., .0, self.dt],
                     [.0, .0, .0, .0, 1., .0],
                     [.0, .0, .0, .0, .0, 1.]])
 
-                self.all_filters[i].Q = Q_discrete_white_noise(dim=3, dt=self.dt, block_size=2, order_by_dim=False) 
+                # And the process noise variance/time is different for first
+                # and second order filters, since the variance here is that of 
+                # a zero velocity and zero velocity acceleration model respectively. 
+                if self.all_filters[i].filter_type == 'first':
+                    noise = Q_discrete_white_noise(dim=3, var = self.constantVelocity_VAR, 
+                                                   dt=self.dt, block_size=2, order_by_dim=False)
+                elif self.all_filters[i].filter_type == 'second':
+                    noise = Q_discrete_white_noise(dim=3, var = self.constantAcceleration_VAR, 
+                                                   dt=self.dt, block_size=2, order_by_dim=False)
 
             # Define the state covariance matrix.
             self.all_filters[i].P = np.array([
