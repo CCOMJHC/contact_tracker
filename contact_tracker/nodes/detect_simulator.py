@@ -9,6 +9,7 @@
 import rospy
 import argparse
 import sys
+from numpy import nan
 from numpy.random import randn
 import matplotlib.pyplot as plt
 
@@ -127,13 +128,19 @@ class DetectSimulator():
             msg.header.stamp = rospy.get_rostime()
             coin_flip = 1
             msg.sensor_id = self.name
-            msg.pose.covariance = [10., 0., 0., 0., 0., 0.,
-                                   0., 10., 0., 0., 0., 0.,
-                                   0., 0., 2., 0., 0., 0.,
-                                   0., 0., 0., 2., 0, 0.,
-                                   0., 0., 0., 0., .2, 0.,
-                                   0., 0., 0., 0., 0., .2]
-            
+            msg.header.frame_id = "map"
+            msg.pose.covariance = [10., 0., nan, nan, nan, nan,
+                                   0., 10., nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan]
+            msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
+                                   0., 1.0, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan,
+                                   nan, nan, nan, nan, nan, nan]
             # Generate message with position and velocity
             if coin_flip > 0:    
                 if self.direction != 'none':
