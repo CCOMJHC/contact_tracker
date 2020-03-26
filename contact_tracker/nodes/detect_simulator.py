@@ -11,6 +11,7 @@ import argparse
 import sys
 from numpy import nan
 from numpy.random import randn
+import numpy as np
 import matplotlib.pyplot as plt
 
 from marine_msgs.msg import Detect
@@ -20,9 +21,11 @@ class DetectSimulator():
     def __init__(self, args):
         
         self.x_pos = args.xpos
-        self.y_pos = args.ypos 
-        self.x_vel = args.xvel
-        self.y_vel = args.yvel
+        self.y_pos = args.ypos
+        self.speed = args.speed
+        #self.x_vel = args.xvel
+        #self.y_vel = args.yvel
+        self.dt = 1
         self.direction = args.direction
         self.return_enabled = args.return_enabled
         self.niter = 1 
@@ -44,8 +47,13 @@ class DetectSimulator():
         plt.plot(self.xs, self.ys, color='b')
         plt.xlabel('x position')
         plt.ylabel('y position')
-        plt.xlim(0, 500)
-        plt.ylim(0, 500)
+        minx = np.min(np.array(self.xs))
+        maxx = np.max(np.array(self.xs))
+        miny = np.min(np.array(self.ys))
+        maxy = np.max(np.array(self.ys))
+        plt.xlim(minx - 20, maxx + 20)
+        plt.ylim(miny - 20, maxy + 20)
+        plt.grid(True)
         plt.savefig(output_path + '.png')
         plt.close()
 
@@ -56,43 +64,51 @@ class DetectSimulator():
         """
 
         if self.direction == 'n':
-            self.y_pos += self.step + randn()
- 
+            self.x_vel = randn()
+            self.y_vel = self.speed + randn()
+            
         elif self.direction == 's':
-            self.y_pos -= self.step + randn()
-             
+            self.x_vel = randn()
+            self.y_vel = -self.speed + randn()
+            
         elif self.direction == 'e':
-            self.x_pos += self.step + randn()
+            self.x_vel = self.speed + randn()
+            self.y_vel = randn()
   
         elif self.direction == 'w':
-            self.x_pos -= self.step + randn()
+            self.x_vel = -self.speed + randn()
+            self.y_vel = randn()
         
         if self.direction == 'ne':
-            self.x_pos += self.step + randn()
-            self.y_pos += self.step + randn()
+            self.x_vel = self.speed * np.sqrt(2) + randn()
+            self.y_vel = self.speed * np.sqrt(2) + randn()
  
         elif self.direction == 'nw':
-            self.x_pos -= self.step + randn()
-            self.y_pos += self.step + randn()
+            self.x_vel = -self.speed * np.sqrt(2) + randn()
+            self.y_vel = self.speed * np.sqrt(2) + randn()
              
         elif self.direction == 'se':
-            self.x_pos += self.step + randn()
-            self.y_pos -= self.step + randn()
+            self.x_vel = self.speed * np.sqrt(2) + randn()
+            self.y_vel = -self.speed * np.sqrt(2) + randn()
   
         elif self.direction == 'sw':
-            self.x_pos -= self.step + randn()
-            self.y_pos -= self.step + randn()
+            self.x_vel = -self.speed * np.sqrt(2) + randn()
+            self.y_vel = -self.speed * np.sqrt(2) + randn()
+
+        self.x_pos += self.x_vel * self.dt 
+        self.y_pos += self.y_vel * self.dt
+
 
         self.xs.append(self.x_pos)
         self.ys.append(self.y_pos)
          
 
-    def turn(self):
+    def turn_right(self):
         """
         Turn the object 90 degrees clockwise from its 
         initial direction.
         """
-
+        print("Turning right.")
         if self.direction == 'n':
             self.direction = 'e'
  
@@ -117,13 +133,43 @@ class DetectSimulator():
         elif self.direction == 'sw':
             self.direction = 'nw'
  
+    def turn_left(self):
+        """
+        Turn the object 90 degrees clockwise from its 
+        initial direction.
+        """
+        print("Turning left.")
+        if self.direction == 'n':
+            self.direction = 'W'
+ 
+        elif self.direction == 's':
+            self.direction = 'e'
+             
+        elif self.direction == 'e':
+            self.direction = 'n'
+  
+        elif self.direction == 'w':
+            self.direction = 's'
+ 
+        if self.direction == 'ne':
+            self.direction = 'nw'
+
+        elif self.direction == 'nw':
+            self.direction = 'sw'
+             
+        elif self.direction == 'se':
+            self.direction = 'ne'
+  
+        elif self.direction == 'sw':
+            self.direction = 'se'
 
     def run(self):
         
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         
         while self.niter < 500 and not rospy.is_shutdown():
-            d = rospy.Duration(1)
+            self.dt = 1
+            d = rospy.Duration(self.dt)            
             msg = Detect()
             msg.header.stamp = rospy.get_rostime()
             coin_flip = 1
@@ -146,14 +192,22 @@ class DetectSimulator():
                 if self.direction != 'none':
                     self.move()
                  
-                if self.niter % 250 == 0:
-                    self.turn()
+                if self.niter % 30 == 0:
+                    if np.random.randn() >= 0.:
+                        self.turn_right()
+                    else:
+                        self.turn_left()
 
                 msg.pose.pose.position.x = self.x_pos 
-                msg.pose.pose.position.y = self.y_pos 
-                msg.twist.twist.linear.x = 1.0
-                msg.twist.twist.linear.y = 1.0
-                print(msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
+                msg.pose.pose.position.y = self.y_pos
+                # These statements make no sense unless you only go ne.
+                # Fixed the by recoding move()
+                # msg.twist.twist.linear.x = 1.0
+                # msg.twist.twist.linear.y = 1.0
+                msg.twist.twist.linear.x = self.x_vel
+                msg.twist.twist.linear.y = self.y_vel
+                
+                print(self.niter, msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
             
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1: 
@@ -189,9 +243,10 @@ def main():
     arg_parser = argparse.ArgumentParser(description='Send fake Detect data to the tracker node for testing purposes.')
     arg_parser.add_argument('-xpos', type=float, help='initial x position of the object')
     arg_parser.add_argument('-ypos', type=float, help='initial y position of the object')
-    arg_parser.add_argument('-xvel', type=float, help='initial x velocity of the object')
-    arg_parser.add_argument('-yvel', type=float, help='initial y velocity of the object')
-    arg_parser.add_argument('-step', type=float, help='step to increment positions each iteration')
+    arg_parser.add_argument('-speed', type=float, help='nominal speed of the object')
+    #arg_parser.add_argument('-xvel', type=float, help='initial x velocity of the object')
+    #arg_parser.add_argument('-yvel', type=float, help='initial y velocity of the object')
+    #arg_parser.add_argument('-step', type=float, help='step to increment positions each iteration')
     arg_parser.add_argument('-direction', type=str, choices=['n', 's', 'e', 'w', 'nw', 'ne', 'se', 'sw', 'none'], help='direction the simulated object should move')
     arg_parser.add_argument('-return_enabled', type=bool, help='generate Detect message only when the return key is pressed')
     arg_parser.add_argument('-show_plot', type=bool, help='plot the course the simulation followed')
