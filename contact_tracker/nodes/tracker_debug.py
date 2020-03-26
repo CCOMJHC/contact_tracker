@@ -15,6 +15,7 @@ import argparse
 import numpy as np
 from numpy import zeros
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 import contact_tracker.contact
 import contact_tracker.contact_kf
@@ -43,6 +44,7 @@ class ContactTracker:
         """
 
         self.all_contacts = {}
+        self.plotcolors = {}
 
 
     def plot_x_vs_y(self, output_path):
@@ -54,11 +56,19 @@ class ContactTracker:
         output_path -- path that the plot will be saved to
         """
         
+        '''
         all_mxs = []
         all_mys = []
         all_pxs = []
         all_pys = []
-
+        '''
+        minx = 0
+        maxx = 0
+        miny = 0
+        maxy = 0
+        
+        plt.figure(figsize=(10,10))            
+        
         for contact in self.all_contacts:
             c = self.all_contacts[contact]
         
@@ -66,6 +76,8 @@ class ContactTracker:
             m_ys = []
             p_xs = []
             p_ys = []
+            e_xs = []
+            e_ys = []
 
             for i in c.zs:
                 m_xs.append(i[0])
@@ -74,21 +86,57 @@ class ContactTracker:
             for i in c.xs:
                 p_xs.append(i[0])
                 p_ys.append(i[1])
+                
+            for i in c.xs:
+                e_xs.append(i[0])
+                e_ys.append(i[1])
 
+            plt.scatter(m_xs, m_ys, marker='o', 
+                        label='contact' + str(c.id) + ' meas', 
+                        color=self.plotcolors[contact])
+            plt.plot(p_xs, p_ys, marker='x',
+                     label='contact' + str(c.id) + ' pred',
+                     color=self.plotcolors[contact])
+            plt.scatter(e_xs, e_ys,marker='.', linestyle='-', 
+                        label='contact' + str(c.id) + ' est', 
+                        color=self.plotcolors[contact])
+
+                
+            tmp = np.min(np.array(m_xs))
+            if tmp < minx: minx = tmp
+            tmp = np.max(np.array(m_xs))
+            if tmp > maxx: maxx = tmp
+            tmp = np.min(np.array(m_ys))
+            if tmp < miny: miny = tmp
+            tmp = np.max(np.array(m_ys))
+            if tmp > maxy: maxy = tmp
+            
+            '''
             all_mxs.append(m_xs)
             all_mys.append(m_ys)
             all_pxs.append(p_xs)
             all_pys.append(p_ys)
-        
-        for i in range(0, len(all_mxs)):
-            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', label='contact' + str(i) + ' measurements', color='y')
-            plt.plot(all_pxs[i], all_pys[i], label='contact' + str (i) + ' predictions')
+            '''
+        '''    
+        minx = np.min([np.min(np.array(x)) for x in all_mxs])
+        maxx = np.max([np.max(np.array(x)) for x in all_mxs])
+        miny = np.min([np.min(np.array(x)) for x in all_mys])
+        maxy = np.max([np.max(np.array(x)) for x in all_mys])
 
+        for i in range(0, len(all_mxs)):
+            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', 
+                        label='contact' + str(i) + ' measurements', 
+                        color=self.plotcolors[c])
+            plt.plot(all_pxs[i], all_pys[i], 
+                     label='contact' + str (i) + ' predictions',
+                     color=self.plotcolors[c])
+        '''
         plt.legend()
         plt.xlabel('x position')
         plt.ylabel('y position')
-        plt.xlim(0, 500)
-        plt.ylim(0, 500)
+        plt.xlim(minx - 20, maxx + 20)
+        plt.ylim(miny - 20, maxy + 20)
+        plt.grid(True)
         plt.savefig(output_path + '.png')
 
 
@@ -123,7 +171,8 @@ class ContactTracker:
             all_times.append(c.times)
 
         for i in range(0, len(all_mxs)):
-            plt.scatter(all_times[i], all_mxs[i], linestyle='-', label='kf ' + str(i) + ' measurements', color='y')
+            plt.scatter(all_times[i], all_mxs[i], linestyle='-', 
+                        label='kf ' + str(i) + ' measurements', color='y')
             plt.plot(all_times[i], all_pxs[i], label='kf ' + str (i) + ' predictions')
 
         plt.legend()
@@ -141,7 +190,7 @@ class ContactTracker:
         Keyword arguments:
         output_path -- path that the plot will be saved to
         """
-
+    
         all_pxs = []
         all_pys = []
         all_zs = []
@@ -169,14 +218,19 @@ class ContactTracker:
             all_zs.append(z_means)
             all_ps.append(cur_ps)
 
+        minx = np.min([np.min(np.array(x)) for x in all_pxs])
+        maxx = np.max([np.max(np.array(x)) for x in all_pxs])
+        miny = np.min([np.min(np.array(x)) for x in all_pys])
+        maxy = np.max([np.max(np.array(x)) for x in all_pys])
             
         for i in range(0, len(all_pxs)):
             plt.plot(all_pxs[i], all_pys[i], label='predictions', color='g')
 
         plt.xlabel('x position')
         plt.ylabel('y position')
-        plt.xlim(0, 300)
-        plt.ylim(0, 300)
+        plt.xlim(minx - 20, maxx + 20)
+        plt.ylim(miny - 20, maxy + 20)
+        plt.grid(True)
         plt.legend()
         plt.savefig(output_path + '.png')
         
@@ -332,7 +386,7 @@ class ContactTracker:
         None if no appropriate contacts are found, otherwise the found contact's id
         """
         
-        greatest_likelihood = 0
+        greatest_likelihood = 0.0
         return_contact_id = None 
 
         for contact in self.all_contacts:
@@ -343,7 +397,6 @@ class ContactTracker:
             # Update the last_measured field for this contact so we know not to 
             # remove it from all_contacts anytime soon. 
             c.last_measured = data.header.stamp
-            c.set_Z(detect_info)
             
             for kf in c.filter_bank.filters:
                 kf.set_Q(c) 
@@ -352,26 +405,58 @@ class ContactTracker:
                 kf.set_R(c, detect_info) 
                 
             c.filter_bank.predict()
+            # Setting the measurement vector must happen after the predict step.
+            # This is because we have to adjust the measurement matrix to ensure
+            # that the predicted state and measured quantities are identical for 
+            # fields we didn't measure (their innovatin is 0). Normally we would just omit what we didn't
+            # measure, and use the measurement matrix, H, to adjust the sizes of
+            # the other calculations to acccomodate. But in the IMM framework, we
+            # need a uniform size. 
+            c.set_Z(detect_info)
             
             for kf in c.filter_bank.filters:
                 kf.set_log_likelihood(c)
 
                 if DEBUG:
+                    '''
                     print('sensor_id: ', detect_info['sensor_id'])
                     print('filter type: ', kf.filter_type)
                     print('contact id: ', c.id)
                     print('likelihood :', kf.get_log_likelihood())
                     print('________________')  
-
+                    '''
             L1 = c.filter_bank.filters[0].get_log_likelihood()
             L2 = c.filter_bank.filters[1].get_log_likelihood()
             
+            # EXPERIMENTAL
+            # Here only the second order filter is being evaluated, as it 
+            # accommodates the largest changes. I'm using the likelihood rather
+            # than the log liklihood, which is equivalent, but easier to 
+            # understand. 
+            
+            for kf in c.filter_bank.filters:
+                if kf.filter_type == 'second':
+                    L = np.exp(kf.get_log_likelihood())
+                    print("Contact: %s Likelihood: %0.4f" % (c.id,L))
+ 
+                   # This requires the measurement to be somewhat likely (1/20).
+                   # Otherwise the measurement is not considered to be a candidate
+                   # measurement of the contact.
+                    if L > 0.05:              
+                        # Here we keep track of the contact for whom the measurement
+                        # has the greatest likelihood.
+                        if L > greatest_likelihood:
+                            greatest_likelihood = L
+                            return_contact_id = c.id
+                            
+                        
+            
             # Not sure about this condition
-            if L1 / L2 > 0.5: 
-                if L1 / L2 > greatest_likelihood:
-                    greatest_likelihood = L1 / L2
-                    return_contact_id = c.id
-
+            #if L1 / L2 > 0.5: 
+            #    if L1 / L2 > greatest_likelihood:
+            #        greatest_likelihood = L1 / L2
+            #        return_contact_id = c.id
+        print("   Greatest Likelihood: %0.4f, Contact: %s" % (greatest_likelihood,return_contact_id))
         return return_contact_id 
  
 
@@ -457,6 +542,18 @@ class ContactTracker:
         self.initial_velocity = config['initial_velocity']
         return config
 
+    def add_contact(self,id,detect_info):
+        
+        first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
+        second_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='second')
+        all_filters = [first_order_kf, second_order_kf]
+        c = contact_tracker.contact.Contact(detect_info, all_filters, id)
+        c.init_filters()
+        c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
+        self.all_contacts[id] = c
+        colors = cm.rainbow(np.linspace(0, 1, 8))
+        self.plotcolors[id] = colors[np.mod(len(self.all_contacts),len(colors))]
+        
 
     def callback(self, data):
         """
@@ -491,14 +588,8 @@ class ContactTracker:
         #######################################################
         
         if not contact_id in self.all_contacts: 
-            first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
-            second_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='second')
-            all_filters = [first_order_kf, second_order_kf]
-            c = contact_tracker.contact.Contact(detect_info, all_filters, data.header.stamp)
-            c.init_filters()
-            c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
-            self.all_contacts[data.header.stamp] = c
-
+            self.add_contact(contact_id,detect_info)
+            c = self.all_contacts[contact_id]
         else:
             c = self.all_contacts[contact_id]
             c.info = detect_info

@@ -141,11 +141,19 @@ class Contact:
         detect_info -- the dictionary containing the detect info being checked
         """
         
+        '''
         if math.isnan(detect_info['x_pos']):
             self.Z = [self.last_xpos, self.last_ypos, self.info['x_vel'], self.info['y_vel']]
         
         elif math.isnan(detect_info['x_vel']):
             self.Z = [self.info['x_pos'], self.info['y_pos'], self.last_xvel, self.last_yvel]
+        
+        else:
+            self.Z = [self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]
+        '''
+        
+        if math.isnan(detect_info['x_vel']):
+            self.Z = [self.info['x_pos'], self.info['y_pos']]
         
         else:
             self.Z = [self.info['x_pos'], self.info['y_pos'], self.info['x_vel'], self.info['y_vel']]
