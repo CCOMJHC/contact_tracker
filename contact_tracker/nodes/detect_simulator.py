@@ -13,7 +13,9 @@ from numpy import nan
 from numpy.random import randn
 import matplotlib.pyplot as plt
 
-from marine_msgs.msg import Detect
+from marine_msgs.msg import Detect, Contact
+
+from project11_transformations.srv import MapToLatLong
 
 class DetectSimulator():
     
@@ -120,27 +122,34 @@ class DetectSimulator():
 
     def run(self):
         
-        self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
+        self.pub_detects = rospy.Publisher('/detects', Detect, queue_size=1)
+        self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)        
+        self.pub_contacts = rospy.Publisher('/contacts', Contact, queue_size=1)        
         
         while self.niter < 500 and not rospy.is_shutdown():
             d = rospy.Duration(1)
-            msg = Detect()
-            msg.header.stamp = rospy.get_rostime()
             coin_flip = 1
-            msg.sensor_id = self.name
-            msg.header.frame_id = "map"
-            msg.pose.covariance = [10., 0., nan, nan, nan, nan,
-                                   0., 10., nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan]
-            msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
-                                   0., 1.0, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan,
-                                   nan, nan, nan, nan, nan, nan]
+            
+            #####################################
+            # Set fields for the Detect message #
+            #####################################
+            detect_msg = Detect()
+            detect_msg.header.stamp = rospy.get_rostime()
+            detect_msg.sensor_id = self.name
+            detect_msg.header.frame_id = "map"
+            detect_msg.pose.covariance = [10., 0., nan, nan, nan, nan,
+                                          0., 10., nan, nan, nan, nan,
+                                          nan, nan, nan, nan, nan, nan,
+                                          nan, nan, nan, nan, nan, nan,
+                                          nan, nan, nan, nan, nan, nan,
+                                          nan, nan, nan, nan, nan, nan]
+            detect_msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
+                                           0., 1.0, nan, nan, nan, nan,
+                                           nan, nan, nan, nan, nan, nan,
+                                           nan, nan, nan, nan, nan, nan,
+                                           nan, nan, nan, nan, nan, nan,
+                                           nan, nan, nan, nan, nan, nan]
+            
             # Generate message with position and velocity
             if coin_flip > 0:    
                 if self.direction != 'none':
@@ -149,11 +158,11 @@ class DetectSimulator():
                 if self.niter % 250 == 0:
                     self.turn()
 
-                msg.pose.pose.position.x = self.x_pos 
-                msg.pose.pose.position.y = self.y_pos 
-                msg.twist.twist.linear.x = 1.0
-                msg.twist.twist.linear.y = 1.0
-                print(msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
+                detect_msg.pose.pose.position.x = self.x_pos 
+                detect_msg.pose.pose.position.y = self.y_pos 
+                detect_msg.twist.twist.linear.x = 1.0
+                detect_msg.twist.twist.linear.y = 1.0
+                print("msg(x,y): ", detect_msg.pose.pose.position.x, detect_msg.pose.pose.position.y)
             
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1: 
@@ -163,24 +172,71 @@ class DetectSimulator():
                 if self.niter % 100 == 0:
                     self.turn()
 
-                msg.twist.twist.linear.x = float('nan') 
-                msg.twist.twist.linear.y = float('nan')
-                #print(msg.header.stamp, ': Generating message with position and not velocity: ', msg.pose.pose.position.x)
+                detect_msg.twist.twist.linear.x = float('nan') 
+                detect_msg.twist.twist.linear.y = float('nan')
 
             # Generate message with velocity and not position
             elif coin_flip == 0:
-                msg.pose.pose.position.x = float('nan') 
-                msg.pose.pose.position.y = float('nan') 
-                msg.twist.twist.linear.x = self.x_vel + randn() 
-                msg.twist.twist.linear.y = self.x_vel + randn() 
-                #print(msg.header.stamp, ': Generating message with velocity and not position: ', msg.pose.pose.position.x)
+                detect_msg.pose.pose.position.x = float('nan') 
+                detect_msg.pose.pose.position.y = float('nan') 
+                detect_msg.twist.twist.linear.x = self.x_vel + randn() 
+                detect_msg.twist.twist.linear.y = self.x_vel + randn() 
             
+
+            #########################################
+            # 2) Set fields for the Contact message #
+            #########################################
+            contact_msg = Contact()
+            #contact_msg.header.stamp = rospy.get_rostime()
+            #contact_msg.header.frame_id = "map"
+            
+            # Do a service call to MaptoLatLong.srv to convert map coordinates to 
+            # latitude and longitude.
+            try:
+                print('making a service call')
+                rospy.wait_for_service('map_to_long')
+                map2long_service = rospy.ServiceProxy('map_to_long', MapToLong)
+                print('ServiceProxy made')
+                
+                map2long_req = MapToLongRequest()
+                print('New request instantiated')
+                map2long_req.map.point.x = self.x_pos
+                map2long_req.map.point.y = self.y_pos
+
+                llcords = map2long_service(map2long_req)
+                print(llcoords)
+                
+            except rospy.ServiceException, e:
+                print("Service call failed: %s", e)
+            
+            contact_msg.position.latitude = llcoords.wgs84.position.latitude
+            contact_msg.position.longitude = llcoords.wgs84.position.longitude
+ 
+            # Convert velocity in x and y into course over ground 
+            # and speed over ground.
+            contact_msg.cog = 0 
+            contact_msg.sog = 0 
+            contact_msg.heading = '' 
+
+            # These fields are assigned arbitrary values for now. 
+            contact_msg.mmsi = 0
+            contact_msg.dimension_to_srbd = 0
+            contact_msg.dimension_to_port = 0
+            contact_msg.dimension_to_bow = 0
+            contact_msg.dimension_to_stern = 0
+ 
+
+            #####################################################           
+            # 3) Publish both of the messages to the publishers #
+            #####################################################
             self.niter += 1
-            
             if self.return_enabled:
                 raw_input()
             
-            self.pub.publish(msg)
+            print('before pub')
+            self.pub_detects.publish(detect_msg)
+            self.pub_contactmap.publish(detect_msg)
+            self.pub_contacts.publish(contact_msg)
             rospy.sleep(d)
 
 
