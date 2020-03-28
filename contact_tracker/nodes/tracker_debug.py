@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 
 import contact_tracker.contact
 import contact_tracker.contact_kf
-from marine_msgs.msg import Detect
+from marine_msgs.msg import Detect, Contact
+from project11_transformations.srv import MapToLatLong
 
 from filterpy.kalman import IMMEstimator
 from filterpy.kalman import KalmanFilter
@@ -43,6 +44,8 @@ class ContactTracker:
         """
 
         self.all_contacts = {}
+        self.pub_contactmap = None
+        self.pub_contacts = None
 
 
     def plot_x_vs_y(self, output_path):
@@ -480,7 +483,7 @@ class ContactTracker:
         #  it is a potential match for our current detect message. 
         contact_id = None 
         if len(self.all_contacts) > 0:
-            contact_id = self.check_all_contacts_by_likelihood(detect_info, data)
+            contact_id = self.check_all_contacts_by_BF(detect_info, data)
         
         if contact_id is None:
            contact_id = data.header.stamp 
@@ -494,9 +497,11 @@ class ContactTracker:
             first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
             second_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='second')
             all_filters = [first_order_kf, second_order_kf]
+            
             c = contact_tracker.contact.Contact(detect_info, all_filters, data.header.stamp)
             c.init_filters()
             c.filter_bank = IMMEstimator(all_filters, c.mu, c.M)
+            
             self.all_contacts[data.header.stamp] = c
 
         else:
@@ -519,18 +524,104 @@ class ContactTracker:
         c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
         c.ps.append(c.filter_bank.P)
 
-        # Remove items from the dictionary that have not been measured recently. 
+
+        ################################################
+        ###### Set fields for the Contact message ######
+        ################################################
+        contact_msg = Contact()
+        contact_msg.header.stamp = detect_info['header'] 
+        contact_msg.header.frame_id = "wgs84"
+        contact_msg.name = str(c.id)
+        contact_msg.call_sign = "UNKNOWN"
+        #contact_msg.heading = course_made_good # Should I subscribe to the cmg node? 
+        #contact_msg.contact_souce = "contact_tracker" #This is supposed to be a float
+
+        # Do a service call to MaptoLatLong.srv to convert map coordinates to 
+        # latitude and longitude.
+        try:
+            print('making a service call')
+            rospy.wait_for_service('map_to_long')
+            map2long_service = rospy.ServiceProxy('map_to_long', MapToLong)
+            print('ServiceProxy made')
+                
+            map2long_req = MapToLongRequest()
+            print('New request instantiated')
+            map2long_req.map.point.x = detect_info['x_pos']
+            map2long_req.map.point.y = detect_info['y_pos'] 
+
+            llcords = map2long_service(map2long_req)
+            print(llcoords)
+               
+        except rospy.ServiceException, e:
+            print("Service call failed: %s", e)
+            
+        contact_msg.position.latitude = llcoords.wgs84.position.latitude
+        contact_msg.position.longitude = llcoords.wgs84.position.longitude
+ 
+        # Convert velocity in x and y into course over ground 
+        # and speed over ground.
+        vx = detect_info['x_vel'] 
+        vy = detect_info['y_vel']
+        contact_msg.cog = np.mod(np.arctan2(vx, vy) * 180/np.pi + 360, 360) 
+        contact_msg.sog = np.sqrt(vx**2 + vy **2)
+
+        # These fields are assigned arbitrary values for now. 
+        contact_msg.mmsi = 0
+        contact_msg.dimension_to_srbd = 0
+        contact_msg.dimension_to_port = 0
+        contact_msg.dimension_to_bow = 0
+        contact_msg.dimension_to_stern = 0
+        
+        ################################################
+        ###### Set fields for the Detect message ######
+        ################################################
+        detect_msg = Detect()
+        contact_msg.header.stamp = detect_info['header'] 
+        contact_msg.header.frame_id = "map"
+        detect_msg.sensor_id = self.name
+
+        # Not entirely sure what to use for these fields. 
+        detect_msg.pose.covariance = [10., 0., nan, nan, nan, nan,
+                                      0., 10., nan, nan, nan, nan,
+                                      nan, nan, nan, nan, nan, nan,
+                                      nan, nan, nan, nan, nan, nan,
+                                      nan, nan, nan, nan, nan, nan,
+                                      nan, nan, nan, nan, nan, nan]
+        detect_msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
+                                       0., 1.0, nan, nan, nan, nan,
+                                       nan, nan, nan, nan, nan, nan,
+                                       nan, nan, nan, nan, nan, nan,
+                                       nan, nan, nan, nan, nan, nan,
+                                       nan, nan, nan, nan, nan, nan]
+
+
+        ##################################
+        ###### Publish the messages ######
+        ##################################
+        self.pub_contactmap.publish(detect_msg)
+        self.pub_contacts.publish(contact_msg)
+
+
+        ###################################
+        ###### Delete stale contacts ######
+        ###################################
         self.delete_stale_contacts()
 
 
     def run(self, args):
         """
         Initialize the node and set it to subscribe to the detects topic.
+        Initialize publishers.
+        Plot results.
         """
 
         rospy.init_node('tracker_debug', anonymous=True)
         srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
+        
+        self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)
+        self.pub_contacts = rospy.Publisher('/contacts', Contact, queue_size=1)
+
         rospy.spin()
         
         if args.plot_type == 'xs_ys':

@@ -13,9 +13,8 @@ from numpy import nan
 from numpy.random import randn
 import matplotlib.pyplot as plt
 
-from marine_msgs.msg import Detect, Contact
+from marine_msgs.msg import Detect
 
-from project11_transformations.srv import MapToLatLong
 
 class DetectSimulator():
     
@@ -123,8 +122,6 @@ class DetectSimulator():
     def run(self):
         
         self.pub_detects = rospy.Publisher('/detects', Detect, queue_size=1)
-        self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)        
-        self.pub_contacts = rospy.Publisher('/contacts', Contact, queue_size=1)        
         
         while self.niter < 500 and not rospy.is_shutdown():
             d = rospy.Duration(1)
@@ -183,60 +180,14 @@ class DetectSimulator():
                 detect_msg.twist.twist.linear.y = self.x_vel + randn() 
             
 
-            #########################################
-            # 2) Set fields for the Contact message #
-            #########################################
-            contact_msg = Contact()
-            #contact_msg.header.stamp = rospy.get_rostime()
-            #contact_msg.header.frame_id = "map"
-            
-            # Do a service call to MaptoLatLong.srv to convert map coordinates to 
-            # latitude and longitude.
-            try:
-                print('making a service call')
-                rospy.wait_for_service('map_to_long')
-                map2long_service = rospy.ServiceProxy('map_to_long', MapToLong)
-                print('ServiceProxy made')
-                
-                map2long_req = MapToLongRequest()
-                print('New request instantiated')
-                map2long_req.map.point.x = self.x_pos
-                map2long_req.map.point.y = self.y_pos
-
-                llcords = map2long_service(map2long_req)
-                print(llcoords)
-                
-            except rospy.ServiceException, e:
-                print("Service call failed: %s", e)
-            
-            contact_msg.position.latitude = llcoords.wgs84.position.latitude
-            contact_msg.position.longitude = llcoords.wgs84.position.longitude
- 
-            # Convert velocity in x and y into course over ground 
-            # and speed over ground.
-            contact_msg.cog = 0 
-            contact_msg.sog = 0 
-            contact_msg.heading = '' 
-
-            # These fields are assigned arbitrary values for now. 
-            contact_msg.mmsi = 0
-            contact_msg.dimension_to_srbd = 0
-            contact_msg.dimension_to_port = 0
-            contact_msg.dimension_to_bow = 0
-            contact_msg.dimension_to_stern = 0
- 
-
-            #####################################################           
-            # 3) Publish both of the messages to the publishers #
-            #####################################################
+            ######################          
+            # 2) Publish message #
+            ######################
             self.niter += 1
             if self.return_enabled:
                 raw_input()
             
-            print('before pub')
             self.pub_detects.publish(detect_msg)
-            self.pub_contactmap.publish(detect_msg)
-            self.pub_contacts.publish(contact_msg)
             rospy.sleep(d)
 
 
