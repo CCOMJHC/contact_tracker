@@ -532,7 +532,7 @@ class ContactTracker:
         contact_msg.header.stamp = detect_info['header'] 
         contact_msg.header.frame_id = "wgs84"
         contact_msg.name = str(c.id)
-        contact_msg.call_sign = "UNKNOWN"
+        contact_msg.callsign = "UNKNOWN"
         #contact_msg.heading = course_made_good # Should I subscribe to the cmg node? 
         #contact_msg.contact_souce = "contact_tracker" #This is supposed to be a float
 
