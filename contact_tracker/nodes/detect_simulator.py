@@ -65,35 +65,35 @@ class DetectSimulator():
 
         if self.direction == 'n':
             self.x_vel = randn()
-            self.y_vel = self.speed + randn()
+            self.y_vel = self.speed + 0.5 * randn()
             
         elif self.direction == 's':
             self.x_vel = randn()
-            self.y_vel = -self.speed + randn()
+            self.y_vel = -self.speed + 0.5 *randn()
             
         elif self.direction == 'e':
-            self.x_vel = self.speed + randn()
+            self.x_vel = self.speed + 0.5 *randn()
             self.y_vel = randn()
   
         elif self.direction == 'w':
-            self.x_vel = -self.speed + randn()
+            self.x_vel = -self.speed + 0.5 *randn()
             self.y_vel = randn()
         
         if self.direction == 'ne':
-            self.x_vel = self.speed * np.sqrt(2) + randn()
-            self.y_vel = self.speed * np.sqrt(2) + randn()
+            self.x_vel = self.speed / np.sqrt(2) + 0.5 * randn()
+            self.y_vel = self.speed / np.sqrt(2) + 0.5 * randn()
  
         elif self.direction == 'nw':
-            self.x_vel = -self.speed * np.sqrt(2) + randn()
-            self.y_vel = self.speed * np.sqrt(2) + randn()
+            self.x_vel = -self.speed / np.sqrt(2) + 0.5 *randn()
+            self.y_vel = self.speed / np.sqrt(2) + 0.5 * randn()
              
         elif self.direction == 'se':
-            self.x_vel = self.speed * np.sqrt(2) + randn()
-            self.y_vel = -self.speed * np.sqrt(2) + randn()
+            self.x_vel = self.speed / np.sqrt(2) + 0.5 * randn()
+            self.y_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
   
         elif self.direction == 'sw':
-            self.x_vel = -self.speed * np.sqrt(2) + randn()
-            self.y_vel = -self.speed * np.sqrt(2) + randn()
+            self.x_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
+            self.y_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
 
         self.x_pos += self.x_vel * self.dt 
         self.y_pos += self.y_vel * self.dt
@@ -140,7 +140,7 @@ class DetectSimulator():
         """
         print("Turning left.")
         if self.direction == 'n':
-            self.direction = 'W'
+            self.direction = 'w'
  
         elif self.direction == 's':
             self.direction = 'e'
@@ -175,8 +175,8 @@ class DetectSimulator():
             coin_flip = 1
             msg.sensor_id = self.name
             msg.header.frame_id = "map"
-            msg.pose.covariance = [10., 0., nan, nan, nan, nan,
-                                   0., 10., nan, nan, nan, nan,
+            msg.pose.covariance = [3., 0., nan, nan, nan, nan,
+                                   0., 3., nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
@@ -207,8 +207,13 @@ class DetectSimulator():
                 msg.twist.twist.linear.x = self.x_vel
                 msg.twist.twist.linear.y = self.y_vel
                 
-                print(self.niter, msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
-            
+                #print(self.niter, msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
+                print("%d, %i,: Msg: [x:%0.3f, y:%0.3f, vx: %0.3f, vy: %0.3f]" % 
+                      (self.niter, msg.header.stamp.secs,
+                       msg.pose.pose.position.x,
+                       msg.pose.pose.position.y,
+                       msg.twist.twist.linear.x,
+                       msg.twist.twist.linear.y))
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1: 
                 if self.direction != 'none':
