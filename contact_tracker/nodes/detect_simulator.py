@@ -188,6 +188,7 @@ class DetectSimulator():
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan]
+            
             # Generate message with position and velocity
             if coin_flip > 0:
                 if self.direction != 'none':
@@ -208,13 +209,13 @@ class DetectSimulator():
                 msg.twist.twist.linear.x = self.x_vel
                 msg.twist.twist.linear.y = self.y_vel
 
-                #print(self.niter, msg.header.stamp, ': Generating message with position and velocity: ', msg.pose.pose.position.x, msg.pose.pose.position.y)
                 print("%d, %i,: Msg: [x:%0.3f, y:%0.3f, vx: %0.3f, vy: %0.3f]" %
                       (self.niter, msg.header.stamp.secs,
                        msg.pose.pose.position.x,
                        msg.pose.pose.position.y,
                        msg.twist.twist.linear.x,
                        msg.twist.twist.linear.y))
+            
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1:
                 if self.direction != 'none':
@@ -223,15 +224,15 @@ class DetectSimulator():
                 if self.niter % 100 == 0:
                     self.turn()
 
-                detect_msg.twist.twist.linear.x = float('nan')
-                detect_msg.twist.twist.linear.y = float('nan')
+                msg.twist.twist.linear.x = float('nan')
+                msg.twist.twist.linear.y = float('nan')
 
             # Generate message with velocity and not position
             elif coin_flip == 0:
-                detect_msg.pose.pose.position.x = float('nan')
-                detect_msg.pose.pose.position.y = float('nan')
-                detect_msg.twist.twist.linear.x = self.x_vel + randn()
-                detect_msg.twist.twist.linear.y = self.x_vel + randn()
+                msg.pose.pose.position.x = float('nan')
+                msg.pose.pose.position.y = float('nan')
+                msg.twist.twist.linear.x = self.x_vel + randn()
+                msg.twist.twist.linear.y = self.x_vel + randn()
 
 
             ######################
@@ -241,7 +242,7 @@ class DetectSimulator():
             if self.return_enabled:
                 raw_input()
 
-            self.pub_detects.publish(detect_msg)
+            self.pub_detects.publish(msg)
             rospy.sleep(d)
 
 
@@ -251,9 +252,6 @@ def main():
     arg_parser.add_argument('-xpos', type=float, help='initial x position of the object')
     arg_parser.add_argument('-ypos', type=float, help='initial y position of the object')
     arg_parser.add_argument('-speed', type=float, help='nominal speed of the object')
-    #arg_parser.add_argument('-xvel', type=float, help='initial x velocity of the object')
-    #arg_parser.add_argument('-yvel', type=float, help='initial y velocity of the object')
-    #arg_parser.add_argument('-step', type=float, help='step to increment positions each iteration')
     arg_parser.add_argument('-direction', type=str, choices=['n', 's', 'e', 'w', 'nw', 'ne', 'se', 'sw', 'none'], help='direction the simulated object should move')
     arg_parser.add_argument('-return_enabled', type=bool, help='generate Detect message only when the return key is pressed')
     arg_parser.add_argument('-show_plot', type=bool, help='plot the course the simulation followed')
@@ -273,11 +271,6 @@ def main():
     if args.show_plot == True:
         rospy.loginfo('Plotting the course of the simulation')
         simulation.plot_course(args.o)
-
-    #except:
-    #    rospy.ROSInterruptException
-    #    rospy.loginfo('Falied to initialize the simulation')
-    #    pass
 
 
 if __name__=='__main__':
