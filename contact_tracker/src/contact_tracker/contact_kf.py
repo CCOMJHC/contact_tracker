@@ -10,6 +10,7 @@ import math
 
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
+from filterpy.common import Q_continuous_white_noise
 
 import numpy as np
 from numpy import zeros
@@ -33,8 +34,51 @@ class ContactKalmanFilter(KalmanFilter):
         self.filter_type = filter_type 
         self.bayes_factor = 0.0
         self.ll = 0.0
-        self.vel_var = 0.3 * 10
-        self.acc_var = 0.1 * 10
+
+
+    def predict_prior(self, u=None, B=None, F=None, Q=None):
+        """
+        Predict next state (prior) using the Kalman filter state propagation
+        equations. This method does NOT update the state, but is used for 
+        hypothesis testing. 
+
+        Parameters
+        ----------
+
+        u : np.array
+            Optional control vector. If not `None`, it is multiplied by B
+            to create the control input into the system.
+
+        B : np.array(dim_x, dim_z), or None
+            Optional control transition matrix; a value of None
+            will cause the filter to use `self.B`.
+
+        F : np.array(dim_x, dim_x), or None
+            Optional state transition matrix; a value of None
+            will cause the filter to use `self.F`.
+
+        Q : np.array(dim_x, dim_x), scalar, or None
+            Optional process noise matrix; a value of None will cause the
+            filter to use `self.Q`.
+        """
+
+        if B is None:
+            B = self.B
+        if F is None:
+            F = self.F
+        if Q is None:
+            Q = self.Q
+        elif np.isscalar(Q):
+            Q = np.eye(self.dim_x) * Q
+
+        # x = Fx + Bu
+        if B is not None and u is not None:
+            self.x_prior = np.dot(F, self.x) + np.dot(B, u)
+        else:
+            self.x_prior = np.dot(F, self.x)
+
+        # P = FPF' + Q
+        self.P_prior = self._alpha_sq * np.dot(np.dot(F, self.P), F.T) + Q
 
 
     def get_log_likelihood(self):
@@ -59,10 +103,10 @@ class ContactKalmanFilter(KalmanFilter):
         contact -- the contact object for which to retrieve the likelihood given the current measurement. 
         """
 
-        S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
+        S = np.dot(self.H, np.dot(self.P_prior, self.H.T)) + self.R
         invS = np.linalg.inv(S) 
 
-        ZHX0 = contact.Z - np.dot(self.H, self.x) 
+        ZHX0 = contact.Z - np.dot(self.H, self.x_prior) 
 
         log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
         self.ll = log_likelihoodM0
@@ -125,7 +169,7 @@ class ContactKalmanFilter(KalmanFilter):
         # calculation would be available in K.S. Calculating it explicitly
         # here allows us to delay propagating the model in the event that
         # we decide not the include the measurement.
-        S = np.dot(self.H, np.dot(self.P, self.H.T)) + self.R
+        S = np.dot(self.H, np.dot(self.P_prior, self.H.T)) + self.R
         invS = np.linalg.inv(S) # Error is occurring because it's the same transposed.
 
         # h will be an offset from the current model providing an alternative
@@ -134,7 +178,7 @@ class ContactKalmanFilter(KalmanFilter):
         
         # This errors out whenever there's a negative value in the diagonal
         #print(np.diag(self.P))
-        h = np.sqrt(np.diag(self.P)) * testfactor
+        h = np.sqrt(np.diag(self.P_prior)) * testfactor
 
         # The "likelihood" of the measurement under the existing
         # model, and that of an alternative model are calculated as
@@ -147,15 +191,15 @@ class ContactKalmanFilter(KalmanFilter):
         # ensure the model shifts away from the measurement values relative to
         # the estimate. This calcualtion is done in piece-meal steps to
         # make it more clear and easier to debug.
-        ZHX0 = contact.Z - np.dot(self.H, self.x) # shouldn't this be abs?
+        ZHX0 = contact.Z - np.dot(self.H, self.x_prior) # shouldn't this be abs?
         '''print('Z: ', contact.Z)
         print('x: ', self.x)'''
 
         # Here we need to apply a different alternate hypothesis for each
         # state variable depending on where the measurement falls (< or >)
         # relative to it.
-        multiplier = [1.0 if x < 0 else -1.0 for x in (contact.Z - np.dot(self.H, self.x))]
-        ZHX1 = np.abs(contact.Z - np.dot(self.H, self.x)) + multiplier * np.dot(self.H, h)
+        multiplier = [1.0 if x < 0 else -1.0 for x in (contact.Z - np.dot(self.H, self.x_prior))]
+        ZHX1 = np.abs(contact.Z - np.dot(self.H, self.x_prior)) + multiplier * np.dot(self.H, h)
 
         log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
         log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
@@ -181,7 +225,7 @@ class ContactKalmanFilter(KalmanFilter):
 
         self.bayes_factor = log_BF
 
-
+    '''
     def set_Q(self, contact):
         """
         Recompute the value of Q for the Kalman filters in this contact.
@@ -196,14 +240,24 @@ class ContactKalmanFilter(KalmanFilter):
                 # So we have to zero-pad the Q matrix of the constant velocity filter
                 # as it is naturally a 4x4.
                 empty_array = np.zeros([6, 6])
-                noise = Q_discrete_white_noise(dim=2, var=self.vel_var, dt=contact.dt, block_size=2, order_by_dim=False) 
+                #noise = Q_discrete_white_noise(dim=2, var=self.vel_var, dt=contact.dt, block_size=2, order_by_dim=False) 
+                noise = Q_continuous_white_noise(dim=2, 
+                                                 spectral_density=self.vel_var,
+                                                 dt=contact.dt,
+                                                 block_size=2,
+                                                 order_by_dim=False)
                 empty_array[:noise.shape[0],:noise.shape[1]] = noise  
                 kf.Q = empty_array
             
             elif kf.filter_type == 'second':
-                kf.Q = Q_discrete_white_noise(dim=3, var=self.acc_var, dt=contact.dt, block_size=2, order_by_dim=False) 
-
-
+                #kf.Q = Q_discrete_white_noise(dim=3, var=self.acc_var, dt=contact.dt, block_size=2, order_by_dim=False) 
+                kf.Q = Q_continuous_white_noise(dim=3,
+                                                spectral_density=self.acc_var,
+                                                dt=contact.dt,
+                                                block_size=2,
+                                                order_by_dim=False)    
+    '''
+    
     def set_F(self, contact):
         """
         Recompute the value of F (process model matrix) for the Kalman 
@@ -243,11 +297,17 @@ class ContactKalmanFilter(KalmanFilter):
 
         for kf in contact.filter_bank.filters:
             if math.isnan(detect_info['x_vel']):
+                '''
                 kf.H = np.array([
                     [1., .0, .0, .0, .0, .0],
                     [.0, 1., .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0],
                     [.0, .0, .0, .0, .0, .0]])
+                '''
+                kf.H = np.array([
+                    [1., .0, .0, .0, .0, .0],
+                    [.0, 1., .0, .0, .0, .0]])
+
             else:
                 kf.H = np.array([
                     [1., .0, .0, .0, .0, .0],
