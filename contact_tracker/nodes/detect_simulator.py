@@ -24,8 +24,6 @@ class DetectSimulator():
         self.x_pos = args.xpos
         self.y_pos = args.ypos
         self.speed = args.speed
-        #self.x_vel = args.xvel
-        #self.y_vel = args.yvel
         self.dt = 1
         self.direction = args.direction
         self.return_enabled = args.return_enabled
@@ -109,7 +107,7 @@ class DetectSimulator():
         Turn the object 90 degrees clockwise from its
         initial direction.
         """
-        print("Turning right.")
+        
         if self.direction == 'n':
             self.direction = 'e'
 
@@ -202,10 +200,6 @@ class DetectSimulator():
 
                 msg.pose.pose.position.x = self.x_pos
                 msg.pose.pose.position.y = self.y_pos
-                # These statements make no sense unless you only go ne.
-                # Fixed the by recoding move()
-                # msg.twist.twist.linear.x = 1.0
-                # msg.twist.twist.linear.y = 1.0
                 msg.twist.twist.linear.x = self.x_vel
                 msg.twist.twist.linear.y = self.y_vel
 

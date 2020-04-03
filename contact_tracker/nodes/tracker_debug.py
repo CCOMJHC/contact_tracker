@@ -21,6 +21,7 @@ import contact_tracker.contact_kf
 from contact_tracker.cfg import contact_trackerConfig
 from marine_msgs.msg import Detect, Contact
 from project11_transformations.srv import MapToLatLong
+from project11_transformations.srv import MapToLatLongRequest
 
 from filterpy.stats.stats import plot_covariance
 from dynamic_reconfigure.server import Server
@@ -572,7 +573,7 @@ class ContactTracker:
         ###### Set fields for the Contact message ######
         ################################################
         contact_msg = Contact()
-        #contact_msg.header.stamp = detect_info['header']
+        contact_msg.header.stamp = detect_info['header']
         contact_msg.header.frame_id = "wgs84"
         contact_msg.name = str(c.id)
         contact_msg.callsign = "UNKNOWN"
@@ -582,21 +583,16 @@ class ContactTracker:
         # Do a service call to MaptoLatLong.srv to convert map coordinates to
         # latitude and longitude.
         try:
-            print('making a service call')
             rospy.wait_for_service('map_to_wgs84')
-            print('waiting for service')
             project11_transformation_node = rospy.ServiceProxy('map_to_wgs84', MapToLatLong)
-            print('ServiceProxy made')
 
-            '''req = MapToLatLongRequest()
-            print('New request instantiated')
+            req = MapToLatLongRequest()
             req.map.point.x = detect_info['x_pos']
             req.map.point.y = detect_info['y_pos']
 
-            llcords = map_to_long(req)
-            print(llcoords)
+            llcoords = project11_transformation_node(req)
             contact_msg.position.latitude = llcoords.wgs84.position.latitude
-            contact_msg.position.longitude = llcoords.wgs84.position.longitude'''
+            contact_msg.position.longitude = llcoords.wgs84.position.longitude
 
         except rospy.ServiceException, e:
             print("Service call failed: %s", e)
@@ -622,21 +618,14 @@ class ContactTracker:
         detect_msg = Detect()
         detect_msg.header.stamp = detect_info['header']
         detect_msg.header.frame_id = "map"
-        #detect_msg.sensor_id = c.name
+        detect_msg.sensor_id = detect_info['sensor_id']
 
-        # Not entirely sure what to use for these fields.
-        detect_msg.pose.covariance = [10., 0., nan, nan, nan, nan,
-                                      0., 10., nan, nan, nan, nan,
-                                      nan, nan, nan, nan, nan, nan,
-                                      nan, nan, nan, nan, nan, nan,
-                                      nan, nan, nan, nan, nan, nan,
-                                      nan, nan, nan, nan, nan, nan]
-        detect_msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
-                                       0., 1.0, nan, nan, nan, nan,
-                                       nan, nan, nan, nan, nan, nan,
-                                       nan, nan, nan, nan, nan, nan,
-                                       nan, nan, nan, nan, nan, nan,
-                                       nan, nan, nan, nan, nan, nan]
+        # Not sure if this is the right thing to do...
+        for kf in c.filter_bank.filters:
+            if kf.filter_type == 'first':
+                detect_msg.pose.covariance = kf.P
+            elif kf.filter_type == 'second':
+                detect_msg.twist.covariance = kf.P 
 
 
         ##################################
