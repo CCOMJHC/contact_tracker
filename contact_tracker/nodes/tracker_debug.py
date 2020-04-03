@@ -569,6 +569,8 @@ class ContactTracker:
         c -- Contact object for which to publish data 
         """
 
+        
+
         ################################################
         ###### Set fields for the Contact message ######
         ################################################
@@ -578,7 +580,7 @@ class ContactTracker:
         contact_msg.name = str(c.id)
         contact_msg.callsign = "UNKNOWN"
         #contact_msg.heading = course_made_good # Should I subscribe to the cmg node?
-        #contact_msg.contact_souce = "contact_tracker" #This is supposed to be a float
+        #contact_msg.contact_souce = "contact_tracker" #This is supposed to be a unit64 
 
         # Do a service call to MaptoLatLong.srv to convert map coordinates to
         # latitude and longitude.
@@ -745,7 +747,7 @@ class ContactTracker:
         rospy.Subscriber('/detects', Detect, self.callback)
 
         self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)
-        self.pub_contacts = rospy.Publisher('/contacts', Contact, queue_size=1)
+        self.pub_contacts = rospy.Publisher('/contact', Contact, queue_size=1)
 
         rospy.spin()
 
