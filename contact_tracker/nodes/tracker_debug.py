@@ -292,7 +292,7 @@ class ContactTracker:
                 'y_pos': float('nan'),
                 'y_vel': float('nan'),
                 }
-
+        
         # Assign values only if they are not NaNs
         if not math.isnan(data.pose.pose.position.x):
             detect_info['x_pos'] = float(data.pose.pose.position.x)
@@ -575,7 +575,8 @@ class ContactTracker:
         ###### Set fields for the Contact message ######
         ################################################
         contact_msg = Contact()
-        contact_msg.header.stamp = detect_info['header']
+        contact_msg.header.stamp.secs = detect_info['header'].stamp.secs
+        contact_msg.header.stamp.nsecs = detect_info['header'].stamp.nsecs
         contact_msg.header.frame_id = "wgs84"
         contact_msg.name = str(c.id)
         contact_msg.callsign = "UNKNOWN"
@@ -618,7 +619,8 @@ class ContactTracker:
         ###### Set fields for the Detect message ######
         ################################################
         detect_msg = Detect()
-        detect_msg.header.stamp = detect_info['header']
+        detect_msg.header.stamp.secs = detect_info['header'].stamp.secs
+        detect_msg.header.stamp.nsecs = detect_info['header'].stamp.nsecs
         detect_msg.header.frame_id = "map"
         detect_msg.sensor_id = detect_info['sensor_id']
 
