@@ -22,6 +22,9 @@ import contact_tracker.contact
 import contact_tracker.contact_kf
 from contact_tracker.cfg import contact_trackerConfig
 from marine_msgs.msg import Detect, Contact
+from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
+from geographic_visualization_msgs.msg import GeoVizPolygon, GeoVizSimplePolygon
+from geographic_msgs.msg import GeoPoint
 from project11_transformations.srv import MapToLatLong
 from project11_transformations.srv import MapToLatLongRequest
 
@@ -45,6 +48,7 @@ class ContactTracker:
         self.all_contacts = {}
         self.plotcolors = {}
         self.all_contact_history = {}
+        self.Ncontacts = 0
 
 
     def plot_x_vs_y(self, output_path):
@@ -738,86 +742,97 @@ class ContactTracker:
         colors = cm.rainbow(np.linspace(0, 1, 8)) # Generate 8 colors from the rainbow colormap
         self.plotcolors[cid] = colors[np.mod(len(self.all_contacts), len(colors))] # Pick the subsequent color from this colormap each time we make a new contact
         
+    def publish_all_contacts(self, timer):
+        ''' publish all tracked contacts '''
+        for cid in self.all_contacts:
+            self.publish_contact(self.all_contacts[cid])
 
-    def publish_msgs(self, c, detect_info):
+    def publish_contact(self, c):
+        ''' publish a tracked contact '''
+
+        msg = Contact()
+        msg.header.stamp = c.last_measured
+        msg.header.frame_id = "wgs84"
+        msg.name = "T-%s" % str(c.id)
+        msg.callsign = "UNKNOWN"
+        
+        try:
+            rospy.wait_for_service('map_to_wgs84')
+            project11_transformation_node = rospy.ServiceProxy('map_to_wgs84', MapToLatLong)
+
+            req = MapToLatLongRequest()
+            req.map.point.x = c.filter_bank.x[0]
+            req.map.point.y = c.filter_bank.x[1]
+
+            llcoords = project11_transformation_node(req)
+            msg.position.latitude = llcoords.wgs84.position.latitude
+            msg.position.longitude = llcoords.wgs84.position.longitude
+
+        except rospy.ServiceException, e:
+            print("Service call failed: %s", e)
+        
+        vx = c.filter_bank.x[2]
+        vy = c.filter_bank.x[3]
+        msg.heading = np.mod(np.arctan2(vx, vy) + 2. * np.pi, 2. * np.pi)
+        msg.cog = msg.heading
+        msg.sog = np.sqrt(vx**2 + vy**2)
+        msg.mmsi = c.id + 10000
+        msg.dimension_to_stbd = 1.
+        msg.dimension_to_port = 1.
+        msg.dimension_to_bow = 3.
+        msg.dimension_to_stern = 3.
+        
+        self.pub_contacts.publish(msg)
+        
+    def publish_detect_to_CAMP(self, detect_info):
         """
-        Initialize new contact and add it to all_contacts.
-
+        Publish detection to CAMP.
+        
         Keyword arguments:
         detect_info -- the dictionary containing the detect info to publish         
         c -- Contact object for which to publish data 
         """
 
+        msg = GeoVizItem()
         
-
-        ################################################
-        ###### Set fields for the Contact message ######
-        ################################################
-        contact_msg = Contact()
-        contact_msg.header.stamp.secs = detect_info['header'].stamp.secs
-        contact_msg.header.stamp.nsecs = detect_info['header'].stamp.nsecs
-        contact_msg.header.frame_id = "wgs84"
-        contact_msg.name = str(c.id)
-        contact_msg.callsign = "UNKNOWN"
-        #contact_msg.heading = course_made_good # Should I subscribe to the cmg node?
-        #contact_msg.contact_souce = "contact_tracker" #This is supposed to be a unit64 
-
+        msg.id = detect_info['sensor_id']
+        msg.id = str(detect_info['header'].stamp.to_sec())
+        msg.label = "DETECT"
+        
         # Do a service call to MaptoLatLong.srv to convert map coordinates to
         # latitude and longitude.
         try:
             rospy.wait_for_service('map_to_wgs84')
-            project11_transformation_node = rospy.ServiceProxy('map_to_wgs84', MapToLatLong)
+            project11_transformation_node = rospy.ServiceProxy('map_to_wgs84', 
+                                                               MapToLatLong)
 
             req = MapToLatLongRequest()
             req.map.point.x = detect_info['x_pos']
             req.map.point.y = detect_info['y_pos']
 
             llcoords = project11_transformation_node(req)
-            contact_msg.position.latitude = llcoords.wgs84.position.latitude
-            contact_msg.position.longitude = llcoords.wgs84.position.longitude
+            msg.label_position.latitude = llcoords.wgs84.position.latitude
+            msg.label_position.longitude = llcoords.wgs84.position.longitude
+
+            point = GeoPoint()
+            point.latitude = llcoords.wgs84.position.latitude
+            point.longitude = llcoords.wgs84.position.longitude
 
         except rospy.ServiceException, e:
             print("Service call failed: %s", e)
-
-        # Convert velocity in x and y into course over ground
-        # and speed over ground.
-        vx = detect_info['x_vel']
-        vy = detect_info['y_vel']
-        contact_msg.cog = np.mod(np.arctan2(vx, vy) * 180/np.pi + 360, 360)
-        contact_msg.sog = np.sqrt(vx**2 + vy **2)
-
-        # These fields are assigned arbitrary values for now.
-        contact_msg.mmsi = 0
-        contact_msg.dimension_to_stbd = 0
-        contact_msg.dimension_to_port = 0
-        contact_msg.dimension_to_bow = 0
-        contact_msg.dimension_to_stern = 0
-
-
-        ################################################
-        ###### Set fields for the Detect message ######
-        ################################################
-        detect_msg = Detect()
-        detect_msg.header.stamp.secs = detect_info['header'].stamp.secs
-        detect_msg.header.stamp.nsecs = detect_info['header'].stamp.nsecs
-        detect_msg.header.frame_id = "map"
-        detect_msg.sensor_id = detect_info['sensor_id']
-
-        # Not sure if this is the right thing to do...
-        for kf in c.filter_bank.filters:
-            if kf.filter_type == 'first':
-                detect_msg.pose.covariance = kf.P
-            elif kf.filter_type == 'second':
-                detect_msg.twist.covariance = kf.P 
-
-
-        ##################################
-        ###### Publish the messages ######
-        ##################################
-        self.pub_contactmap.publish(detect_msg)
-        self.pub_contacts.publish(contact_msg)
-
-
+            return
+        
+        pointlist = GeoVizPointList()
+        pointlist.points = [point]
+        pointlist.color.r = 255.
+        pointlist.color.g = 0.
+        pointlist.color.b = 0.
+        pointlist.color.a = 0.7
+        pointlist.size = 10.
+        msg.point_groups = [pointlist]
+        
+        self.pub_detects.publish(msg)
+        
 
     def callback(self, data):
         """
@@ -835,6 +850,8 @@ class ContactTracker:
         if len(detect_info) == 0:
             return
 
+        self.publish_detect_to_CAMP(detect_info)
+        
         #  If there are no contacts yet, no need to traverse empty dictionary
         #  Otherwise, we have to check each contact in the dictionary to see if
         #  it is a potential match for our current detect message.
@@ -846,7 +863,9 @@ class ContactTracker:
             contact_id = self.check_all_contacts_by_BF(detect_info,data)
             
         if contact_id is None:
-           contact_id = data.header.stamp
+           #contact_id = data.header.stamp
+           contact_id = self.Ncontacts
+           self.Ncontacts += 1
 
 
         #######################################################
@@ -927,8 +946,12 @@ class ContactTracker:
         srv = Server(contact_trackerConfig, self.reconfigure_callback)
         rospy.Subscriber('/detects', Detect, self.callback)
 
-        self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)
+        #self.pub_contactmap = rospy.Publisher('/contact_map', Detect, queue_size=1)
         self.pub_contacts = rospy.Publisher('/contact', Contact, queue_size=1)
+        self.pub_detects = rospy.Publisher('/udp/project11/display', 
+                                           GeoVizItem, 
+                                           queue_size=1 )
+        timer = rospy.Timer(rospy.Duration(1), self.publish_all_contacts)
 
         rospy.spin()
         
