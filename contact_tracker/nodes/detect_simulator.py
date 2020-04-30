@@ -62,6 +62,9 @@ class DetectSimulator():
         Move the object in the direction specified by the user 
         from the command line.
         """
+        
+        print ("Move Direction: %s" % self.direction)
+
 
         if self.direction == 'n':
             self.x_vel = randn()
@@ -94,6 +97,39 @@ class DetectSimulator():
         elif self.direction == 'sw':
             self.x_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
             self.y_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
+        
+        elif self.direction == 'nne':
+            self.x_vel = self.speed * np.cos(67.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(67.5*np.pi/180.) + 0.5 * randn()
+        
+        elif self.direction == 'ene':
+            self.x_vel = self.speed * np.cos(22.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(22.5*np.pi/180.) + 0.5 * randn()
+        
+        elif self.direction == 'ese':
+            self.x_vel = self.speed * np.cos(337.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(337.5*np.pi/180.) + 0.5 * randn()
+
+        elif self.direction == 'sse':
+            self.x_vel = self.speed * np.cos(292.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(292.5*np.pi/180.) + 0.5 * randn()
+
+        elif self.direction == 'ssw':
+            self.x_vel = self.speed * np.cos(247.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(247.5*np.pi/180.) + 0.5 * randn()
+
+        elif self.direction == 'wsw':
+            self.x_vel = self.speed * np.cos(202.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(202.5*np.pi/180.) + 0.5 * randn()
+
+        elif self.direction == 'wnw':
+            self.x_vel = self.speed * np.cos(157.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(157.5*np.pi/180.) + 0.5 * randn()
+
+        elif self.direction == 'nnw':
+            self.x_vel = self.speed * np.cos(112.5*np.pi/180.) + 0.5 * randn()
+            self.y_vel = self.speed * np.sin(112.5*np.pi/180.) + 0.5 * randn()
+
 
         self.x_pos += self.x_vel * self.dt 
         self.y_pos += self.y_vel * self.dt
@@ -103,6 +139,127 @@ class DetectSimulator():
         self.ys.append(self.y_pos)
          
 
+    def slow_turn_right(self):
+        
+        print("Slow Turn Right.")
+   
+        if self.direction == 'n':
+            self.direction = 'nnw'
+
+        elif self.direction == 'nnw':
+            self.direction = 'nw'
+
+        elif self.direction == 'nw':
+            self.direction = 'wnw'
+
+        elif self.direction == 'wnw':
+            self.direction = 'w'
+
+        elif self.direction == 'w':
+            self.direction = 'wsw'
+            
+        elif self.direction == 'wsw':
+            self.direction = 'sw'
+
+        elif self.direction == 'sw':
+            self.direction = 'ssw'
+
+        elif self.direction == 'ssw':
+            self.direction = 's'
+
+        elif self.direction == 's':
+            self.direction = 'sse'
+
+        elif self.direction == 'sse':
+            self.direction = 'se'
+
+        elif self.direction == 'se':
+            self.direction = 'ese'
+
+        elif self.direction == 'ese':
+            self.direction = 'e'
+
+        elif self.direction == 'e':
+            self.direction = 'ene'
+
+        elif self.direction == 'ene':
+            self.direction = 'ne'
+
+        elif self.direction == 'ne':
+            self.direction = 'nne'
+
+        elif self.direction == 'nne':
+            self.direction = 'n'
+            
+        self.x_pos += self.x_vel * self.dt 
+        self.y_pos += self.y_vel * self.dt
+
+
+        self.xs.append(self.x_pos)
+        self.ys.append(self.y_pos)
+
+    def slow_turn_left(self):
+
+        print("Slow Turn Left.")
+
+        
+        if self.direction == 'n':
+            self.direction = 'nne'
+
+        elif self.direction == 'nne':
+            self.direction = 'ne'
+
+        elif self.direction == 'ne':
+            self.direction = 'ene'
+
+        elif self.direction == 'ene':
+            self.direction = 'e'
+
+        elif self.direction == 'e':
+            self.direction = 'ese'
+            
+        elif self.direction == 'ese':
+            self.direction = 'se'
+
+        elif self.direction == 'se':
+            self.direction = 'sse'
+
+        elif self.direction == 'sse':
+            self.direction = 's'
+
+        elif self.direction == 's':
+            self.direction = 'ssw'
+
+        elif self.direction == 'ssw':
+            self.direction = 'sw'
+
+        elif self.direction == 'sw':
+            self.direction = 'wsw'
+
+        elif self.direction == 'wsw':
+            self.direction = 'w'
+
+        elif self.direction == 'w':
+            self.direction = 'wnw'
+
+        elif self.direction == 'wnw':
+            self.direction = 'nw'
+
+        elif self.direction == 'nw':
+            self.direction = 'nnw'
+
+        elif self.direction == 'nnw':
+            self.direction = 'n'
+
+        self.x_pos += self.x_vel * self.dt 
+        self.y_pos += self.y_vel * self.dt
+
+
+        self.xs.append(self.x_pos)
+        self.ys.append(self.y_pos) 
+        
+    
+    
     def turn_right(self):
         """
         Turn the object 90 degrees clockwise from its 
@@ -167,6 +324,8 @@ class DetectSimulator():
         
         self.pub = rospy.Publisher('/detects', Detect, queue_size=1)
         
+        self.slow_turn_blinker = 'off' # allows 90 deg turns spaced over 2 interations.
+        
         while self.niter < 500 and not rospy.is_shutdown():
             self.dt = 1
             d = rospy.Duration(self.dt)            
@@ -192,11 +351,32 @@ class DetectSimulator():
                 if self.direction != 'none':
                     self.move()
                  
+                # This mess allows the simulator to execute 45 degree turns 
+                # in 2 22.5 degree steps to slow the turn rate and (hopefully)
+                # make more realistically moving targets. 
+                if self.slow_turn_blinker == 'right':
+                    self.slow_turn_right()
+                    self.slow_turn_blinker = 'off'                    
+
+                if self.slow_turn_blinker == 'left':
+                    self.slow_turn_left()
+                    self.slow_turn_blinker = 'off'
+                    
                 if self.niter % 30 == 0:
+
+                    if np.random.randn() >= 0 and self.slow_turn_blinker == 'off':                    
+                        self.slow_turn_blinker = 'right'
+                        self.slow_turn_right()
+                    elif self.slow_turn_blinker == 'off':
+                        self.slow_turn_blinker = 'left'
+                        self.slow_turn_left()
+                    
+                    '''
                     if np.random.randn() >= 0.:
                         self.turn_right()
                     else:
                         self.turn_left()
+                    '''
 
                 msg.pose.pose.position.x = self.x_pos 
                 msg.pose.pose.position.y = self.y_pos
