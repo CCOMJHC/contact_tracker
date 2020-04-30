@@ -37,8 +37,8 @@ class Contact:
         self.mu = np.array([0.3, 0.7])
         self.M = np.array([[0.3, 0.7],
                            [0.95, 0.05]])
-        self.M = np.array([[0.5, 0.5],
-                           [0.5, 0.5]])
+        #self.M = np.array([[0.5, 0.5],
+        #                   [0.5, 0.5]])
 
         '''self.mu = np.array([0.5, 0.5])
         self.M = np.array([[0.5, 0.5],
@@ -51,8 +51,8 @@ class Contact:
         # model for 1st and 2nd order filters. Units are m^2/s^3 and characterize
         # both how much the uncertainty grows with each predict but also how
         # much the estimate is allowed to change with each step. 
-        self.vel_var = .5
-        self.acc_var = .1
+        self.vel_var = 1
+        self.acc_var = .5
        
         # Variables that keep track of time
         self.dt = 1.0 

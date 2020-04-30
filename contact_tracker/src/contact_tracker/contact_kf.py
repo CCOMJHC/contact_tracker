@@ -11,6 +11,7 @@ import math
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 from filterpy.common import Q_continuous_white_noise
+from filterpy.stats import likelihood
 
 import numpy as np
 from numpy import zeros
@@ -94,6 +95,16 @@ class ContactKalmanFilter(KalmanFilter):
         """
         return self.bayes_factor
 
+    def set_likelihood(self,contact):
+        ''' 
+        Sets the likelihood of the measurements given the model prediction.
+        '''
+        self.L = likelihood(contact.Z, 
+                                     self.x, 
+                                     self.P_prior, 
+                                     self.H, 
+                                     self.R)   
+        self.ll = np.log(self.L)
 
     def set_log_likelihood(self, contact):
         """
