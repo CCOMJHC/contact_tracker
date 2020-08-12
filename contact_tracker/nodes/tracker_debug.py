@@ -27,6 +27,7 @@ from geographic_visualization_msgs.msg import GeoVizPolygon, GeoVizSimplePolygon
 from geographic_msgs.msg import GeoPoint
 from project11_transformations.srv import MapToLatLong
 from project11_transformations.srv import MapToLatLongRequest
+import cPickle as pickle
 
 from filterpy.stats.stats import plot_covariance
 from dynamic_reconfigure.server import Server
@@ -44,12 +45,56 @@ class ContactTracker:
         """
         Define the constructor.
         """
+        self.Ncontacts = 0                      # Number of contacts tracked so far.
+        self.all_contacts = {}                  # Contacts currently being tracked.
+        self.contact_history_buffer = {}        # All contacts history since 'duration'
+        self.contact_buffer_duration = 200.      # Time in seconds to buffer contact history.
+        self.detect_history_buffer = []         # List of detects received since 'duration.'
+        self.detect_buffer_duration = 200
 
-        self.all_contacts = {}
-        self.plotcolors = {}
-        self.all_contact_history = {}
-        self.Ncontacts = 0
-
+        # Default value Bayes Filter Hypothesis Test Factor
+        # Roughly determines the number of standard deviations away
+        # from a contact a detect must be before it is assumed to
+        # be a new contact.
+        self.Nsigma = 10
+        
+        # Display parameters.
+        self.contact_display_duration = 20      # Duration in secinds of contact information to display.
+        self.detect_display_duration = 20
+        self.plotcolors = {}           # Used for auto-assigning colors for plots.
+        # A color wheel created from the Color Sequence Editor Using CIELuv Uniform Color Space
+        # Oliveri and Ware (Ware, 1988)
+        self.colorwheel =  [(np.array([.6421733329734752,    
+                            0.05260355996805199,    
+                            0.0656277553662272])),
+                        (np.array([0.4957569461595583,    
+                             0.10021478784902092,    
+                             0.049194253546821255]) * 255).astype(int),
+                        (np.array([0.36800484167532843,
+                                      0.1417999955715154,
+                                      0.03441488578246513]) * 255).astype(int),
+                        (np.array([0.2560770265961858, 
+                                   0.17669515411201658,
+                                   0.03717623024142687]) * 255).astype(int),
+                        (np.array([0.12479017030494177,
+                                      0.2142569004760196,
+                                      0.07480436427688678]) * 255).astype(int),    
+                        (np.array([0.08041813835636266,
+                                      0.2165442636649675,
+                                      0.19376225757731255]) * 255).astype(int),
+                        (np.array([0.08667725914402996,
+                                      0.19755071563708018,
+                                      0.3675725959108131]) * 255).astype(int),
+                        (np.array([0.1134911076177515    ,
+                                      0.16324047987890247,
+                                      0.6318123323716915]) * 255).astype(int),
+                        (np.array([0.36154562492049597,
+                                      0.07127852687409003,
+                                      0.775006337089268]) * 255).astype(int),
+                        (np.array([0.5097685163700237,
+                                      0.036552303829553205,
+                                      0.6541173361674163]) * 255).astype(int)]
+                
 
     def plot_x_vs_y(self, output_path):
         """
@@ -67,12 +112,12 @@ class ContactTracker:
         fig, ax1 = plt.subplots(1,figsize=(12,12))
         
         tstart = 0
-        for id in self.all_contact_history:
-            contactList = self.all_contact_history[id]
-            print(contactList[0].Z)
+        for id in self.contact_history_buffer:
+            contactList = self.contact_history_buffer[id]
+            #print(contactList[0].Z)
             
-            m_xs = [c.Z[0] for c in contactList]
-            m_ys = [c.Z[1] for c in contactList]
+            m_xs = [c.filter_bank.filters[0].z[0] for c in contactList]
+            m_ys = [c.filter_bank.filters[0].z[1] for c in contactList]
             e_xs = [c.filter_bank.x[0] for c in contactList]
             e_ys = [c.filter_bank.x[1] for c in contactList]
             p_xs = [c.all_filters[1].x_prior[0] for c in contactList]
@@ -84,47 +129,15 @@ class ContactTracker:
             sigma_px = np.sqrt(np.array([c.all_filters[1].P_prior[0,0] for c in contactList]))
             sigma_py = np.sqrt(np.array([c.all_filters[1].P_prior[1,1] for c in contactList]))
             tt = np.array([c.evalTime for c in contactList] )
+            # It's possible that the script was stopped before this was populated,
+            # so catch it.
+            if len(tt) == 0:
+                continue
             if tstart == 0:
                 tstart = tt[0]
             tt = tt - tstart
             
 
-            '''
-            plt.figure(figsize=(10,10))
-    
-            for contact in self.all_contacts:
-                c = self.all_contacts[contact]
-    
-                m_xs = []
-                m_ys = []
-                p_xs = []
-                p_ys = []
-                e_xs = []
-                e_ys = []
-    
-                for i in c.zs:
-                    m_xs.append(i[0])
-                    m_ys.append(i[1])
-    
-                for i in c.xs:
-                    p_xs.append(i[0])
-                    p_ys.append(i[1])
-    
-                for i in c.xs:
-                    e_xs.append(i[0])
-                    e_ys.append(i[1])
-                
-                plt.scatter(m_xs, m_ys, marker='.',
-                            label='contact' + str(c.id) + ' meas',
-                            color=self.plotcolors[c.id])
-                plt.plot(p_xs, p_ys, marker='x',
-                         label='contact' + str(c.id) + ' pred',
-                         color=self.plotcolors[c.id])
-                plt.scatter(e_xs, e_ys,marker='P', linestyle='-',
-                            label='contact' + str(c.id) + ' est',
-                            color = 'r')
-                            #color=self.plotcolors[contact])
-            '''
             tmp = np.min(np.array(m_xs))
             if tmp < minx: minx = tmp
             tmp = np.max(np.array(m_xs))
@@ -143,31 +156,10 @@ class ContactTracker:
             ax1.plot(e_xs, e_ys,marker='P', linestyle='-', 
                         label='contact' + str(id) + ' est',
                         color = 'r')
-            
-            
             #color=self.plotcolors[contact])
-            '''
-            all_mxs.append(m_xs)
-            all_mys.append(m_ys)
-            all_pxs.append(p_xs)
-            all_pys.append(p_ys)
-            '''
-        '''    
-        minx = np.min([np.min(np.array(x)) for x in all_mxs])
-        maxx = np.max([np.max(np.array(x)) for x in all_mxs])
-        miny = np.min([np.min(np.array(x)) for x in all_mys])
-        maxy = np.max([np.max(np.array(x)) for x in all_mys])
-
-        for i in range(0, len(all_mxs)):
-            plt.scatter(all_mxs[i], all_mys[i], linestyle='-', 
-                        label='contact' + str(i) + ' measurements', 
-                        color=self.plotcolors[c])
-            plt.plot(all_pxs[i], all_pys[i], 
-                     label='contact' + str (i) + ' predictions',
-                     color=self.plotcolors[c])
-        '''
+            
+            
         plt.legend()
-
         plt.xlabel('x position')
         plt.ylabel('y position')
         plt.xlim(minx - 20, maxx + 20)
@@ -190,30 +182,35 @@ class ContactTracker:
         maxx = 0
         miny = 0
         maxy = 0
-        fig, (ax1,ax2,ax3) = plt.subplots(3,sharex=True,figsize=(12,8))
+        fig, (ax1,ax2,ax3,ax4) = plt.subplots(4,sharex=True,figsize=(12,8))
         
         tstart = 0
         
-        for cid in self.all_contact_history:
-            contactList = self.all_contact_history[cid]
-            print(contactList[0].Z)
+        for cid in self.contact_history_buffer:
+            contactList = self.contact_history_buffer[cid]
+            #print(contactList[0].Z)
 
-            m_xs = [c.Z[0] for c in contactList]
-            m_ys = [c.Z[1] for c in contactList]
+            m_xs = [c.filter_bank.filters[0].z[0] for c in contactList]
+            m_ys = [c.filter_bank.filters[0].z[1] for c in contactList]
             e_xs = [c.filter_bank.x[0] for c in contactList]
             e_ys = [c.filter_bank.x[1] for c in contactList]
-            p_xs = [c.all_filters[1].x_prior[0] for c in contactList]
-            p_ys = [c.all_filters[1].x_prior[1] for c in contactList]
+            p_xs = [c.filter_bank.x_prior[0] for c in contactList]
+            p_ys = [c.filter_bank.x_prior[1] for c in contactList]
             sigma_mx = np.sqrt(np.array([c.all_filters[0].R[0,0] for c in contactList]))
             sigma_my = np.sqrt(np.array([c.all_filters[0].R[1,1] for c in contactList]))
             sigma_ex = np.sqrt(np.array([c.filter_bank.P[0,0] for c in contactList]))
             sigma_ey = np.sqrt(np.array([c.filter_bank.P[1,1] for c in contactList]))
             sigma_px = np.sqrt(np.array([c.all_filters[1].P_prior[0,0] for c in contactList]))
             sigma_py = np.sqrt(np.array([c.all_filters[1].P_prior[1,1] for c in contactList]))
-            BF = [c.all_filters[1].get_bayes_factor() for c in contactList]
-            
+            BF = [c.bayes_factor for c in contactList]
+            #MU = [x for x in c.filter_bank.mu]
+            #print(MU)
             tt = np.array([c.evalTime for c in contactList] )
-  
+            # It's possible that the script was stopped before this was populated,
+            # so catch it.
+            if len(tt) == 0:
+                continue
+
             if tstart == 0:
                 tstart = tt[0]
             tt = tt - tstart
@@ -250,13 +247,13 @@ class ContactTracker:
             ax3.plot(tt,BF,'-',
                      marker='x',
                      color = 'm')
-            
-        '''
-        for i in range(0, len(all_mxs)):
-            plt.scatter(all_times[i], all_mxs[i], linestyle='-', 
-                        label='kf ' + str(i) + ' measurements', color='y')
-            plt.plot(all_times[i], all_pxs[i], label='kf ' + str (i) + ' predictions')
-        '''
+            '''ax4.plot(tt,[x[0] for x in MU],'-',
+                     marker='v',
+                     color = 'g')
+            ax4.plot(tt,[x[1] for x in MU],'-',
+                     marker='o',
+                     color='b')
+            '''
 
         ax1.set_ylabel('x')
         ax1.set_ylim(minx-5, maxx+5)
@@ -267,6 +264,8 @@ class ContactTracker:
         ax3.grid(True)
         ax3.set_ylim(0,20)
         ax3.set_ylabel('LOG BF')
+        #ax4.grid(True)
+        #ax4.ylabel('MU, V (g), A (b)')
         #ax1.legend()
         #ax2.legend()
         #plt.legend()
@@ -294,12 +293,12 @@ class ContactTracker:
         fig, ax1 = plt.subplots(1,figsize=(12,12))
         
         tstart = 0
-        for id in self.all_contact_history:
-            contactList = self.all_contact_history[id]
+        for id in self.contact_history_buffer:
+            contactList = self.contact_history_buffer[id]
             #print(contactList[0].Z)
             
-            m_xs = [c.Z[0] for c in contactList]
-            m_ys = [c.Z[1] for c in contactList]
+            m_xs = [c.filter_bank.filters[0].z[0] for c in contactList]
+            m_ys = [c.filter_bank.filters[0].z[1] for c in contactList]
             e_xs = [c.filter_bank.x[0] for c in contactList]
             e_ys = [c.filter_bank.x[1] for c in contactList]
             p_xs = [c.all_filters[1].x_prior[0] for c in contactList]
@@ -308,6 +307,10 @@ class ContactTracker:
             P = [c.filter_bank.P for c in contactList]
             P_prior = [c.all_filters[1].P_prior for c in contactList]
             tt = np.array([c.evalTime for c in contactList] )
+            # It's possible that the script was stopped before this was populated,
+            # so catch it.
+            if len(tt) == 0:
+                continue
             if tstart == 0:
                 tstart = tt[0]
             tt = tt - tstart
@@ -344,43 +347,6 @@ class ContactTracker:
                                 cov = np.array(P_prior[i][:2,:2]),
                                 show_center=True,
                                 ec = 'g')
-        '''
-
-        all_pxs = []
-        all_pys = []
-        all_zs = []
-        all_ps = []
-
-        for contact in self.all_contacts:
-            c = self.all_contacts[contact]
-            p_xs = []
-            p_ys = []
-            cur_ps = []
-            z_means = []
-
-            for i in c.xs:
-                p_xs.append(i[0])
-                p_ys.append(i[1])
-
-            all_pxs.append(p_xs)
-            all_pys.append(p_ys)
-
-            for i in range(0, len(c.xs), 4):
-                z_mean = np.array([c.zs[i][0], c.zs[i][1]])
-                cur_p = c.ps[i]
-                plot_covariance(mean=z_mean, cov=cur_p)
-
-            all_zs.append(z_means)
-            all_ps.append(cur_ps)
-
-        minx = np.min([np.min(np.array(x)) for x in all_pxs])
-        maxx = np.max([np.max(np.array(x)) for x in all_pxs])
-        miny = np.min([np.min(np.array(x)) for x in all_pys])
-        maxy = np.max([np.max(np.array(x)) for x in all_pys])
-
-        for i in range(0, len(all_pxs)):
-            plt.plot(all_pxs[i], all_pys[i], label='predictions', color='g')
-        '''
 
         plt.xlabel('x position')
         plt.ylabel('y position')
@@ -436,28 +402,30 @@ class ContactTracker:
                 'x_vel': float('nan'),
                 'y_pos': float('nan'),
                 'y_vel': float('nan'),
+                'type': "UNKNOWN"
                 }
         
         # Assign values only if they are not NaNs
-        if not math.isnan(data.pose.pose.position.x):
+        if ((not math.isnan(data.pose.pose.position.x)) and
+            (not math.isnan(data.pose.pose.position.y))):
             detect_info['x_pos'] = float(data.pose.pose.position.x)
-
-        if not math.isnan(data.pose.pose.position.y):
             detect_info['y_pos'] = float(data.pose.pose.position.y)
+            detect_info['type'] = "POSITIONONLY"
 
-        if not math.isnan(data.twist.twist.linear.x):
+        if ((not math.isnan(data.twist.twist.linear.x)) and
+                (not math.isnan(data.twist.twist.linear.y))):
+
             detect_info['x_vel'] = float(data.twist.twist.linear.x)
-
-        if not math.isnan(data.twist.twist.linear.y):
             detect_info['y_vel'] = float(data.twist.twist.linear.y)
+            if detect_info["type"] == "POSITIONONLY":
+                detect_info["type"] = "POSITIONANDVELOCITY"
+            else:
+                detect_info["type"] = "VELOCITYONLY"
 
-        # Check to see that if one coordinate is not NaN, neither is the other
-        if ((not math.isnan(detect_info['x_pos']) and math.isnan(detect_info['y_pos'])) or (math.isnan(detect_info['x_pos']) and not math.isnan(detect_info['y_pos']))):
-            rospy.loginfo('ERROR: x_pos and y_pos both were not nans...returning')
-            detect_info = {}
-        if ((not math.isnan(detect_info['x_vel']) and math.isnan(detect_info['y_vel'])) or (math.isnan(detect_info['x_vel']) and not math.isnan(detect_info['y_vel']))):
-            rospy.loginfo('ERROR: x_vel and y_vel both were not nans...returning')
-            detect_info = {}
+        if detect_info["type"] == "UNKNOWN":
+            rospy.loginfo("Missing complete detection data.")
+            rospy.loginfo(data)
+            detect_info = None
 
         return detect_info
 
@@ -574,6 +542,18 @@ class ContactTracker:
               (greatest_likelihood,return_contact_id))
         return return_contact_id
 
+    def check_all_contacts_by_IMM_BF(self):
+
+        greatest_logBF = 0
+        return_contact_id = None
+
+        for contact in self.all_contacts:
+            c = self.all_contacts[contact]
+            if c.bayes_factor > 2.:
+                if c.bayes_factor > greatest_logBF:
+                    greatest_logBF = c.bayes_factor
+                    return_contact_id = c.id
+        return return_contact_id
 
     def check_all_contacts_by_BF(self, detect_info, data):
         """
@@ -662,9 +642,21 @@ class ContactTracker:
             # Recompute the value for dt, so we can use it to update this Contact's
             # KalmanFilter's Q(s).
             c.dt = (detect_info['header'].stamp - c.last_measured).to_sec()
-            c.set_Z(detect_info)
+            c.last_detect_info = detect_info
+            c.set_Z()
+            c.set_R()
             c.set_Q()    # sets Q for all filters.
-            
+            c.set_H()
+            c.set_F(dt =  c.dt)
+            # Unlike predict(), predict_prior() does not update the state, x, just x_prior and P_prior.
+            # This is useful for statistical tests between the measurement and the predicted
+            # state of the contact at measurement time, but prior to the state update without
+            # actually changing the state, which predict() would do.
+            c.predictIMMprior()  # Does not update state.
+            #c.calculate_measurement_likelihood()
+            c.calculate_IMM_bayes_factor(Nsigma = self.Nsigma)
+
+            '''
             for kf in c.filter_bank.filters:
                 kf.set_F(c)
                 kf.set_H(c, detect_info)
@@ -672,16 +664,19 @@ class ContactTracker:
                 kf.predict_prior()   # This does not update the state, x. Just x_prior.
                 #kf.set_log_likelihood(c)
                 kf.set_likelihood(c)
-                kf.set_bayes_factor(c, 2.0)
-
-                if kf.filter_type == 'second':
-                    print("C: %s: Prior X,Y: %0.3f,%0.3f L: %f ll: %f, logBF: %0.2f" % 
-                          (c.id, 
-                           np.sqrt(kf.P_prior[0,0]), 
-                           np.sqrt(kf.P_prior[1,1]),
-                           kf.L, kf.ll, kf.get_bayes_factor()))
+                #kf.set_bayes_factor(c, 2.0)
+                kf.set_bayes_factor(c, 3.0)
+            '''
+            '''
+            print("C: %s: Prior X,Y: %0.3f,%0.3f L: %f ll: %f, logBF: %0.2f" %
+                  (c.id,
+                   np.sqrt(c.filter_bank.P_prior[0,0]),
+                   np.sqrt(c.filter_bank.P_prior[1,1]),
+                   c.filter_bank.likelihood[0], kf.ll, c.bayes_factor))
                     #               np.exp(kf.get_log_likelihood())))
-                    
+            '''
+            print(c.filter_bank)
+
     def delete_stale_contacts(self):
         """
         Remove items from the dictionary that have not been measured recently,
@@ -704,11 +699,15 @@ class ContactTracker:
                 del self.all_contacts[contact_id]
                 
             # UNCERTAINTY
+            # TODO: Move the max uncertainty to a config file.
+            # TODO: Make he max uncertainty a function of the detection range
+            # so that it grows with distance. This will allow us to track
+            # distant objects
             for kf in cur_contact.all_filters:
                 if kf.filter_type == 'second':
-                    if (kf.P_prior[0,0] > 50**2 or kf.P_prior[1,1] > 50**2):
+                    if (kf.P_prior[0,0] > 1000**2 or kf.P_prior[1,1] > 1000**2):
                         rospy.loginfo(('Deleting state contact -' + 
-                                      'Position Var too large: %0.1f,%0.1f') 
+                                      'x,y Var too large: %0.1f,%0.1f')
                                       % (np.sqrt(kf.P_prior[0,0]), 
                                          np.sqrt(kf.P_prior[1,1])))
                         del self.all_contacts[contact_id]
@@ -734,11 +733,14 @@ class ContactTracker:
         detect_info -- the dictionary containing the detect info to use 
         """
 
+        '''
         first_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='first')
         second_order_kf = contact_tracker.contact_kf.ContactKalmanFilter(dim_x=6, dim_z=4, filter_type='second')
         all_filters = [first_order_kf, second_order_kf]
-        c = contact_tracker.contact.Contact(detect_info, all_filters, cid)
-        self.all_contacts[cid] = c
+        '''
+        self.all_contacts[cid] = contact_tracker.contact.Contact(detect_info, cid)
+
+        # Extra stuff for plotting/debugging.
         colors = cm.rainbow(np.linspace(0, 1, 8)) # Generate 8 colors from the rainbow colormap
         self.plotcolors[cid] = colors[np.mod(len(self.all_contacts), len(colors))] # Pick the subsequent color from this colormap each time we make a new contact
         
@@ -784,7 +786,7 @@ class ContactTracker:
         
         self.pub_contacts.publish(msg)
         
-    def publish_detect_to_CAMP(self, detect_info):
+    def publish_detect_to_CAMP(self):
         """
         Publish detection to CAMP.
         
@@ -792,12 +794,9 @@ class ContactTracker:
         detect_info -- the dictionary containing the detect info to publish         
         c -- Contact object for which to publish data 
         """
-
-        msg = GeoVizItem()
         
-        msg.id = detect_info['sensor_id']
-        msg.id = str(detect_info['header'].stamp.to_sec())
-        msg.label = "DETECT"
+        # First we need to convert the position of the latest detect 
+        # to lat/lon.
         
         # Do a service call to MaptoLatLong.srv to convert map coordinates to
         # latitude and longitude.
@@ -807,31 +806,56 @@ class ContactTracker:
                                                                MapToLatLong)
 
             req = MapToLatLongRequest()
-            req.map.point.x = detect_info['x_pos']
-            req.map.point.y = detect_info['y_pos']
+            req.map.point.x = self.detect_history_buffer[-1]['x_pos']
+            req.map.point.y = self.detect_history_buffer[-1]['y_pos']
 
             llcoords = project11_transformation_node(req)
+            self.detect_history_buffer[-1]['latitude'] = llcoords.wgs84.position.latitude
+            self.detect_history_buffer[-1]['longitude'] = llcoords.wgs84.position.longitude
+            
+            '''
             msg.label_position.latitude = llcoords.wgs84.position.latitude
             msg.label_position.longitude = llcoords.wgs84.position.longitude
 
             point = GeoPoint()
             point.latitude = llcoords.wgs84.position.latitude
             point.longitude = llcoords.wgs84.position.longitude
-
+            '''
+            
         except rospy.ServiceException, e:
             print("Service call failed: %s", e)
-            return
+            return        
         
-        pointlist = GeoVizPointList()
-        pointlist.points = [point]
-        pointlist.color.r = 255.
-        pointlist.color.g = 0.
-        pointlist.color.b = 0.
-        pointlist.color.a = 0.7
-        pointlist.size = 10.
-        msg.point_groups = [pointlist]
+
+        detect_sensors = np.unique([x['sensor_id'] for x in self.detect_history_buffer])
         
-        self.pub_detects.publish(msg)
+        index = 0
+        for detect_sensor in detect_sensors:
+            msg = GeoVizItem()
+            msg.id = 'R0'
+                    
+            #msg.id = str(detect_info['header'].stamp.to_sec())
+            msg.label = "DETECTS" 
+            pointlist = GeoVizPointList()
+            
+            for detect_info in self.detect_history_buffer:
+                if detect_info['sensor_id'] == detect_sensor:    
+                    point = GeoPoint()
+                    point.latitude = detect_info['latitude']
+                    point.longitude = detect_info['longitude']            
+                    pointlist.points.append(point)
+
+            pointlist.color.r = self.colorwheel[index * len(self.colorwheel)][0]
+            pointlist.color.g = self.colorwheel[index * len(self.colorwheel)][1]
+            pointlist.color.b = self.colorwheel[index * len(self.colorwheel)][2]
+            pointlist.color.a = 0.2
+            pointlist.size = 10.
+            msg.point_groups = [pointlist]
+            msg.label_position.latitude = point.latitude
+            msg.label_position.longitude = point.longitude
+            print(msg)
+            self.pub_detects.publish(msg)
+            index = index + 1
         
 
     def callback(self, data):
@@ -847,87 +871,74 @@ class ContactTracker:
 
         # Initialize variables and store in a dictionary.
         detect_info = self.populate_detect_info(data)
-        if len(detect_info) == 0:
+        if detect_info is None:
             return
 
-        self.publish_detect_to_CAMP(detect_info)
-        
-        #  If there are no contacts yet, no need to traverse empty dictionary
-        #  Otherwise, we have to check each contact in the dictionary to see if
-        #  it is a potential match for our current detect message.
-        self.setupContactsForDetect(detect_info)
+        # Capture a buffer of received detections for debugging.
+        self.detect_history_buffer.append(deepcopy(detect_info))
 
-        contact_id = None
-        if len(self.all_contacts) > 0:            
-            #contact_id = self.check_all_contacts_by_likelihood(detect_info, data)
-            contact_id = self.check_all_contacts_by_BF(detect_info,data)
-            
-        if contact_id is None:
-           #contact_id = data.header.stamp
-           contact_id = self.Ncontacts
-           self.Ncontacts += 1
+        # Remove buffered items older than detect_buffer_duration (seconds)
+        self.detect_history_buffer = [x for x in self.detect_history_buffer if
+                                      ((rospy.get_rostime().to_sec() - x['header'].stamp.to_sec()) <
+                                       self.detect_buffer_duration)]
 
+        self.publish_detect_to_CAMP()
 
-        #######################################################
-        ####### CREATE OR UPDATE CONTACT WITH VARIABLES #######
-        #######################################################
-
-        if not contact_id in self.all_contacts:
-            self.add_contact(contact_id, detect_info)
-            self.all_contacts[contact_id].set_Z(detect_info)
-        
+        #########################################################
+        ####### CREATE OR UPDATE CONTACT WITH MEASUREMENT #######
+        #########################################################
+        # Sets up existing contacts for comparison with this detection data.
+        if len(self.all_contacts) > 0:
+            self.setupContactsForDetect(detect_info)
+            contact_id = self.check_all_contacts_by_IMM_BF()
+            # If contact_id is None, the detect was not associated with any existing contact.
+            # so make a new one.
+            if contact_id is None:
+                self.Ncontacts += 1
+                contact_id = self.Ncontacts
+                self.add_contact(self.Ncontacts, detect_info)
         else:
-            c = self.all_contacts[contact_id]
-            c.info = detect_info
+            self.Ncontacts += 1
+            contact_id = self.Ncontacts
+            self.add_contact(contact_id, detect_info)
 
-            if not math.isnan(detect_info['x_pos']):
-                c.last_xpos = detect_info['x_pos']
-                c.last_ypos = detect_info['y_pos']
+        c = self.all_contacts[contact_id]
 
-            if not math.isnan(detect_info['x_vel']):
-                c.last_xvel = detect_info['x_vel']
-                c.last_yvel = detect_info['y_vel']
+        # Incorporate with filters in the filter_bank.
+        c.filter_bank.predict()
+        # setupContacts... above sets the measurement vector, Z, for each filter
+        # in the IMM filter bank. This is somewhat atypical, but inconsequential
+        # and we can extract it from one to conform to the standard IMM.update() call.
+        c.filter_bank.update(c.all_filters[0].Z)
 
-            # Incorporate with filters in the filter_bank.
-            c.filter_bank.predict()
-            c.filter_bank.update(c.Z)
-            c.last_measured = detect_info['header'].stamp
-        
-            # Publish info about this detect and contact
-            #self.publish_msgs(c, detect_info)
+        print("MU: %0.3f, %0.3f" % (c.filter_bank.mu[0],c.filter_bank.mu[1]))
+        c.last_measured = detect_info['header'].stamp
 
-
-        #######################################################
-        # Append appropriate prior and measurements to lists. #
-        #######################################################
+        #########################################################
+        # Capture states of tracked contacts in contact history #
+        #########################################################
         for cid in self.all_contacts:
             # This will be a little memory hungry, but it will capture the
             # entire state of all contacts at each time step. Needed to debug.
             self.all_contacts[cid].evalTime = detect_info['header'].stamp.to_sec()
 
-            if cid not in self.all_contact_history:
-                self.all_contact_history[cid] = []
+            if cid not in self.contact_history_buffer:
+                self.contact_history_buffer[cid] = []
 
-            self.all_contact_history[cid].append(deepcopy(self.all_contacts[cid]))
+            self.contact_history_buffer[cid].append(deepcopy(self.all_contacts[cid]))
             c = self.all_contacts[cid]
-            
-            # Iterate over all contacts associated with the measurement.
-            if cid == contact_id:
-                c.xs.append(np.array([c.filter_bank.x[0], c.filter_bank.x[1]]))
-                c.zs.append(np.array([c.info['x_pos'], c.info['y_pos']]))
-                c.ps.append(c.filter_bank.P)
-            
-            else:
-                # For contacts not associated with the measurement, capture their
-                # predicted location for the measurement time. This is calcualted
-                # and stored in the "prior" parameters of the kalman filter.
-                # Capture only the values for the 1st order filter for simplicity.
-                # Why 1st and not 2nd? dunno.
-                c.xs.append(np.array([c.all_filters[0].x_prior[0], c.all_filters[0].x[1]]))
-                #c.xs.append(np.array([c.filter_bank.filters[0].x_prior[0], c.filter_bank.filters[0].x[1]]))
-                c.zs.append(np.array([np.nan, np.nan]))
-                c.ps.append(c.all_filters[0].P_prior)
 
+        ########################################################
+        # Remove states from contact history that are too old. #
+        ########################################################
+        
+        for cid in self.contact_history_buffer:
+            contactList = self.contact_history_buffer[cid]
+            # Remove items older than the intended buffer duration.
+            self.contact_history_buffer[cid] = [x for x in contactList if 
+                               (rospy.get_rostime().to_sec() - x.evalTime) < 
+                               self.contact_buffer_duration]
+            
 
         ###################################
         ###### DELETE STALE CONTACTS ######
@@ -954,8 +965,14 @@ class ContactTracker:
         timer = rospy.Timer(rospy.Duration(1), self.publish_all_contacts)
 
         rospy.spin()
-        
-        print(args.plot_type)
+
+        # Save detect and contact buffers for debugging.
+        print("Saving buffer data to tracker_debug.dat")
+        with open('tracker_debug.dat', 'wb') as F:
+            pickle.dump(self.contact_history_buffer,F)
+            pickle.dump(self.detect_history_buffer,F)
+        F.close()
+
         for plottype in args.plot_type:
             print("Plotting: %s" % plottype)
             if plottype == 'xs_ys':
@@ -965,15 +982,6 @@ class ContactTracker:
             elif plottype == 'ellipses':
                 self.plot_ellipses(args.o)
 
-        '''            
-
-        if args.plot_type == 'xs_ys':
-            self.plot_x_vs_y(args.o)
-        elif args.plot_type =='xs_times':
-            self.plot_x_vs_time(args.o)
-        elif args.plot_type == 'ellipses':
-            self.plot_ellipses(args.o)
-        '''
 
 def main():
 
@@ -982,11 +990,15 @@ def main():
                             choices=['xs_ys', 'xs_times', 'ellipses'], 
                             help='specify the type of plot to produce, if you want one')
     arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='tracker_plot')
+    arg_parser.add_argument('-Nsigma', type=float, default=10.0,
+                            help=('Roughly indicates how many sigma away from contact a detect' 
+                                'can be to still be considered a measure of the contact.'))
     args = arg_parser.parse_args()
     
 
     try:
         ct = ContactTracker()
+        ct.Nsigma = args.Nsigma
         ct.run(args)
 
     except rospy.ROSInterruptException:
