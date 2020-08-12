@@ -96,9 +96,11 @@ class ContactKalmanFilter(KalmanFilter):
         return self.bayes_factor
 
     def set_likelihood(self,contact):
-        ''' 
+        '''
+        NOT USED
         Sets the likelihood of the measurements given the model prediction.
         '''
+
         self.L = likelihood(contact.Z, 
                                      self.x, 
                                      self.P_prior, 
@@ -106,8 +108,20 @@ class ContactKalmanFilter(KalmanFilter):
                                      self.R)   
         self.ll = np.log(self.L)
 
+    def calculate_measurement_likelihood_from_prior(self):
+        '''
+        Sets the likelihood of the measurements given the model prediction.
+        '''
+        self.L = likelihood(self.Z,
+                            self.x_prior,
+                            self.P_prior,
+                            self.H,
+                            self.R)
+        self.ll = np.log(self.L)
+
     def set_log_likelihood(self, contact):
         """
+        NOT USED
         Calculates the log likelihood of the contact given the measurement. 
 
         Keyword arguments:
@@ -123,7 +137,7 @@ class ContactKalmanFilter(KalmanFilter):
         self.ll = log_likelihoodM0
 
 
-    def set_bayes_factor(self, contact, testfactor):
+    def calculate_bayes_factor(self, Nsigma = 3):
         """ 
         Calculates Bayes Factor to test how consistant
         the measurement is with the model.
@@ -189,7 +203,7 @@ class ContactKalmanFilter(KalmanFilter):
         
         # This errors out whenever there's a negative value in the diagonal
         #print(np.diag(self.P))
-        h = np.sqrt(np.diag(self.P_prior)) * testfactor
+        h = np.sqrt(np.diag(self.P_prior)) * Nsigma
 
         # The "likelihood" of the measurement under the existing
         # model, and that of an alternative model are calculated as
@@ -202,15 +216,15 @@ class ContactKalmanFilter(KalmanFilter):
         # ensure the model shifts away from the measurement values relative to
         # the estimate. This calcualtion is done in piece-meal steps to
         # make it more clear and easier to debug.
-        ZHX0 = contact.Z - np.dot(self.H, self.x_prior) # shouldn't this be abs?
+        ZHX0 = self.Z - np.dot(self.H, self.x_prior) # shouldn't this be abs?
         '''print('Z: ', contact.Z)
         print('x: ', self.x)'''
 
         # Here we need to apply a different alternate hypothesis for each
         # state variable depending on where the measurement falls (< or >)
         # relative to it.
-        multiplier = [1.0 if x < 0 else -1.0 for x in (contact.Z - np.dot(self.H, self.x_prior))]
-        ZHX1 = np.abs(contact.Z - np.dot(self.H, self.x_prior)) + multiplier * np.dot(self.H, h)
+        multiplier = [1.0 if x < 0 else -1.0 for x in (self.Z - np.dot(self.H, self.x_prior))]
+        ZHX1 = np.abs(self.Z - np.dot(self.H, self.x_prior)) + multiplier * np.dot(self.H, h)
 
         log_likelihoodM0 = -0.5*(np.dot(ZHX0.T, np.dot(invS, ZHX0)))
         log_likelihoodM1 = -0.5*(np.dot(ZHX1.T, np.dot(invS, ZHX1)))
@@ -269,7 +283,7 @@ class ContactKalmanFilter(KalmanFilter):
                                                 order_by_dim=False)    
     '''
     
-    def set_F(self, contact):
+    def set_F(self, dt = 1.):
         """
         Recompute the value of F (process model matrix) for the Kalman 
         filters in this Contact.
@@ -278,27 +292,26 @@ class ContactKalmanFilter(KalmanFilter):
         contact -- contact object for which to recompute F 
         """
 
-        for kf in contact.filter_bank.filters:
-            if kf.filter_type == 'first':
-                kf.F = np.array([
-                    [1., .0, contact.dt, .0, 0.5*contact.dt**2, .0],
-                    [.0, 1., .0, contact.dt, .0, 0.5*contact.dt**2],
-                    [.0, .0, 1., .0, contact.dt, .0],
-                    [.0, .0, .0, 1., .0, contact.dt],
-                    [.0, .0, .0, .0, .0, .0],
-                    [.0, .0, .0, .0, .0, .0]])
-                
-            elif kf.filter_type == 'second':
-                kf.F = np.array([
-                    [1., .0, contact.dt, .0, 0.5*contact.dt**2, .0],
-                    [.0, 1., .0, contact.dt, .0, 0.5*contact.dt**2],
-                    [.0, .0, 1., .0, contact.dt, .0],
-                    [.0, .0, .0, 1., .0, contact.dt],
-                    [.0, .0, .0, .0, 1., .0],
-                    [.0, .0, .0, .0, .0, 1.]])
+        if self.filter_type == 'first':
+            self.F = np.array([
+                [1., .0, dt, .0, 0.5*dt**2, .0],
+                [.0, 1., .0, dt, .0, 0.5*dt**2],
+                [.0, .0, 1., .0, dt, .0],
+                [.0, .0, .0, 1., .0, dt],
+                [.0, .0, .0, .0, .0, .0],
+                [.0, .0, .0, .0, .0, .0]])
+
+        elif self.filter_type == 'second':
+            self.F = np.array([
+                [1., .0, dt, .0, 0.5*dt**2, .0],
+                [.0, 1., .0, dt, .0, 0.5*dt**2],
+                [.0, .0, 1., .0, dt, .0],
+                [.0, .0, .0, 1., .0, dt],
+                [.0, .0, .0, .0, 1., .0],
+                [.0, .0, .0, .0, .0, 1.]])
 
 
-    def set_H(self, contact, detect_info):
+    def set_H(self, detect_type):
         """
         Recompute the values of H for the Kalman filters in this Contact.
 
@@ -306,28 +319,46 @@ class ContactKalmanFilter(KalmanFilter):
         contact -- contact object for which to recompute H 
         """
 
-        for kf in contact.filter_bank.filters:
-            if math.isnan(detect_info['x_vel']):
-                '''
-                kf.H = np.array([
-                    [1., .0, .0, .0, .0, .0],
-                    [.0, 1., .0, .0, .0, .0],
-                    [.0, .0, .0, .0, .0, .0],
-                    [.0, .0, .0, .0, .0, .0]])
-                '''
-                kf.H = np.array([
-                    [1., .0, .0, .0, .0, .0],
-                    [.0, 1., .0, .0, .0, .0]])
+        if detect_type == "POSITIONONLY":
 
-            else:
-                kf.H = np.array([
-                    [1., .0, .0, .0, .0, .0],
-                    [.0, 1., .0, .0, .0, .0],
-                    [.0, .0, 1., .0, .0, .0],
-                    [.0, .0, .0, 1., .0, .0]])
+            self.H = np.array([
+                [1., .0, .0, .0, .0, .0],
+                [.0, 1., .0, .0, .0, .0],
+                [.0, .0, .0, .0, .0, .0],
+                [.0, .0, .0, .0, .0, .0]])
 
+        elif detect_type == "POSITIONANDVELOCITY":
+            self.H = np.array([
+                [1., 0., 0., 0., 0., 0.],
+                [0., 1., 0., 0., 0., 0.],
+                [0., 0., 1., 0., 0., 0.],
+                [0., 0., 0., 1., 0., 0.]])
+        elif detect_type == "VELOCITYONLY":
+            self.h = np.array([
+                [0., 0., 1., 0., 0., 0.],
+                [0., 0., 0., 1., 0., 0.]
+            ])
+        else:
+            print("ERROR!!! Detect type incorrect: %s" % detect_type)
 
-    def set_R(self, contact, detect_info):
+    def set_Z(self, detect_info):
+        ''' Set the measurement vector from detection information.'''
+
+        if detect_info['type'] == "POSITIONONLY":
+            # The filterpy filter object does not accommodate a variable
+            # measurement model. One must have z=4x1 for every measurement.
+            # So we fake it by populating the missing fields from the previous
+            # state.
+            self.Z = [detect_info['x_pos'], detect_info['y_pos'], self.x[3], self.x[4]]
+        elif detect_info['type'] == "POSITIONANDVELOCITY":
+            self.Z = [detect_info['x_pos'],
+                                     detect_info['y_pos'],
+                                     detect_info['x_vel'],
+                                     detect_info['y_vel']]
+        elif detect_info["type"] == "VELOCITYONLY":
+            self.Z = [detect_info['x_vel'], detect_info['y_vel']]
+
+    def set_R(self, detect_info):
         """
         Set each filter's R value for this contact besed on the pos_covar field from  
         a Detect message.
@@ -340,17 +371,33 @@ class ContactKalmanFilter(KalmanFilter):
         pc = detect_info['pos_covar']
         tc = detect_info['twist_covar']
 
-        for kf in contact.filter_bank.filters:
-            if math.isnan(detect_info['x_vel']):
-                kf.R = np.array([[pc[0], .0],
-                                 [.0, pc[7]]])
-            
-            else:
-                kf.R = np.array([[pc[0], .0, .0, .0],
-                                 [.0, pc[7], .0, .0],
-                                 [.0, .0, tc[0], .0],
-                                 [.0, .0, .0, tc[7]]])
-                
+        if detect_info["type"] == "POSITIONONLY":
+            '''
+            self.R = np.array([[pc[0], 0.],
+                               [0., pc[7]]])
+                               '''
+
+            # The filterpy filter object does not accommodate a variable
+            # measurement model. One must have R=4x4 for every measurement.
+            # So we fake it by populating the missing fields from the previous
+            # state. Here he uncertainty is increased to ensure allow the
+            # actual measurements to have sufficient influence.
+
+            self.R = np.array([[pc[0], .0, .0, .0],
+                               [.0, pc[7], .0, .0],
+                               [.0, .0, self.P[2][2]*10, .0],
+                               [.0, .0, .0, self.P[3][3]*10]])
+
+
+        elif detect_info["type"] == "POSITIONANDVELOCITY":
+            self.R = np.array([[pc[0], .0, .0, .0],
+                             [.0, pc[7], .0, .0],
+                             [.0, .0, tc[0], .0],
+                             [.0, .0, .0, tc[7]]])
+        elif detect_info["type"] == "VELOCITYONLY":
+            self.R = np.array([[tc[0], .0],
+                             [.0, tc[7]]])
+
 
        
 
