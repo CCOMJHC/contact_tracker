@@ -32,6 +32,9 @@ class DetectSimulator():
         self.name = args.name
         self.xs = []
         self.ys = []
+        self.velocity_noise = args.noise
+        self.report_interval = args.report_interval
+        self.slowTurns = False
 
 
     def plot_course(self, output_path):
@@ -66,68 +69,68 @@ class DetectSimulator():
 
 
         if self.direction == 'n':
-            self.x_vel = randn()
-            self.y_vel = self.speed + 0.5 * randn()
+            self.x_vel = self.velocity_noise * randn()
+            self.y_vel = self.speed + self.velocity_noise * randn()
 
         elif self.direction == 's':
-            self.x_vel = randn()
-            self.y_vel = -self.speed + 0.5 *randn()
+            self.x_vel =self.velocity_noise * randn()
+            self.y_vel = -self.speed + self.velocity_noise *randn()
 
         elif self.direction == 'e':
-            self.x_vel = self.speed + 0.5 *randn()
-            self.y_vel = randn()
+            self.x_vel = self.speed + self.velocity_noise *randn()
+            self.y_vel = self.velocity_noise * randn()
 
         elif self.direction == 'w':
-            self.x_vel = -self.speed + 0.5 *randn()
-            self.y_vel = randn()
+            self.x_vel = -self.speed + self.velocity_noise *randn()
+            self.y_vel = self.velocity_noise * randn()
 
         if self.direction == 'ne':
-            self.x_vel = self.speed / np.sqrt(2) + 0.5 * randn()
-            self.y_vel = self.speed / np.sqrt(2) + 0.5 * randn()
+            self.x_vel = self.speed / np.sqrt(2) + self.velocity_noise * randn()
+            self.y_vel = self.speed / np.sqrt(2) + self.velocity_noise * randn()
 
         elif self.direction == 'nw':
-            self.x_vel = -self.speed / np.sqrt(2) + 0.5 *randn()
-            self.y_vel = self.speed / np.sqrt(2) + 0.5 * randn()
+            self.x_vel = -self.speed / np.sqrt(2) + self.velocity_noise *randn()
+            self.y_vel = self.speed / np.sqrt(2) + self.velocity_noise * randn()
 
         elif self.direction == 'se':
-            self.x_vel = self.speed / np.sqrt(2) + 0.5 * randn()
-            self.y_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
+            self.x_vel = self.speed / np.sqrt(2) + self.velocity_noise * randn()
+            self.y_vel = -self.speed / np.sqrt(2) + self.velocity_noise * randn()
 
         elif self.direction == 'sw':
-            self.x_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
-            self.y_vel = -self.speed / np.sqrt(2) + 0.5 * randn()
+            self.x_vel = -self.speed / np.sqrt(2) + self.velocity_noise * randn()
+            self.y_vel = -self.speed / np.sqrt(2) + self.velocity_noise * randn()
         
         elif self.direction == 'nne':
-            self.x_vel = self.speed * np.cos(67.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(67.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(67.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(67.5*np.pi/180.) + self.velocity_noise * randn()
         
         elif self.direction == 'ene':
-            self.x_vel = self.speed * np.cos(22.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(22.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(22.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(22.5*np.pi/180.) + self.velocity_noise * randn()
         
         elif self.direction == 'ese':
-            self.x_vel = self.speed * np.cos(337.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(337.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(337.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(337.5*np.pi/180.) + self.velocity_noise * randn()
 
         elif self.direction == 'sse':
-            self.x_vel = self.speed * np.cos(292.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(292.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(292.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(292.5*np.pi/180.) + self.velocity_noise * randn()
 
         elif self.direction == 'ssw':
-            self.x_vel = self.speed * np.cos(247.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(247.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(247.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(247.5*np.pi/180.) + self.velocity_noise * randn()
 
         elif self.direction == 'wsw':
-            self.x_vel = self.speed * np.cos(202.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(202.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(202.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(202.5*np.pi/180.) + self.velocity_noise * randn()
 
         elif self.direction == 'wnw':
-            self.x_vel = self.speed * np.cos(157.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(157.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(157.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(157.5*np.pi/180.) + self.velocity_noise * randn()
 
         elif self.direction == 'nnw':
-            self.x_vel = self.speed * np.cos(112.5*np.pi/180.) + 0.5 * randn()
-            self.y_vel = self.speed * np.sin(112.5*np.pi/180.) + 0.5 * randn()
+            self.x_vel = self.speed * np.cos(112.5*np.pi/180.) + self.velocity_noise * randn()
+            self.y_vel = self.speed * np.sin(112.5*np.pi/180.) + self.velocity_noise * randn()
 
 
         self.x_pos += self.x_vel * self.dt
@@ -143,52 +146,52 @@ class DetectSimulator():
         print("Slow Turn Right.")
    
         if self.direction == 'n':
-            self.direction = 'nnw'
-
-        elif self.direction == 'nnw':
-            self.direction = 'nw'
-
-        elif self.direction == 'nw':
-            self.direction = 'wnw'
-
-        elif self.direction == 'wnw':
-            self.direction = 'w'
-
-        elif self.direction == 'w':
-            self.direction = 'wsw'
-            
-        elif self.direction == 'wsw':
-            self.direction = 'sw'
-
-        elif self.direction == 'sw':
-            self.direction = 'ssw'
-
-        elif self.direction == 'ssw':
-            self.direction = 's'
-
-        elif self.direction == 's':
-            self.direction = 'sse'
-
-        elif self.direction == 'sse':
-            self.direction = 'se'
-
-        elif self.direction == 'se':
-            self.direction = 'ese'
-
-        elif self.direction == 'ese':
-            self.direction = 'e'
-
-        elif self.direction == 'e':
-            self.direction = 'ene'
-
-        elif self.direction == 'ene':
-            self.direction = 'ne'
-
-        elif self.direction == 'ne':
             self.direction = 'nne'
 
-        elif self.direction == 'nne':
+        elif self.direction == 'nnw':
             self.direction = 'n'
+
+        elif self.direction == 'nw':
+            self.direction = 'nnw'
+
+        elif self.direction == 'wnw':
+            self.direction = 'nw'
+
+        elif self.direction == 'w':
+            self.direction = 'wnw'
+            
+        elif self.direction == 'wsw':
+            self.direction = 'w'
+
+        elif self.direction == 'sw':
+            self.direction = 'wsw'
+
+        elif self.direction == 'ssw':
+            self.direction = 'sw'
+
+        elif self.direction == 's':
+            self.direction = 'ssw'
+
+        elif self.direction == 'sse':
+            self.direction = 's'
+
+        elif self.direction == 'se':
+            self.direction = 'sse'
+
+        elif self.direction == 'ese':
+            self.direction = 'se'
+
+        elif self.direction == 'e':
+            self.direction = 'ese'
+
+        elif self.direction == 'ene':
+            self.direction = 'e'
+
+        elif self.direction == 'ne':
+            self.direction = 'ene'
+
+        elif self.direction == 'nne':
+            self.direction = 'ne'
             
         self.x_pos += self.x_vel * self.dt 
         self.y_pos += self.y_vel * self.dt
@@ -203,52 +206,52 @@ class DetectSimulator():
 
         
         if self.direction == 'n':
-            self.direction = 'nne'
-
-        elif self.direction == 'nne':
-            self.direction = 'ne'
-
-        elif self.direction == 'ne':
-            self.direction = 'ene'
-
-        elif self.direction == 'ene':
-            self.direction = 'e'
-
-        elif self.direction == 'e':
-            self.direction = 'ese'
-            
-        elif self.direction == 'ese':
-            self.direction = 'se'
-
-        elif self.direction == 'se':
-            self.direction = 'sse'
-
-        elif self.direction == 'sse':
-            self.direction = 's'
-
-        elif self.direction == 's':
-            self.direction = 'ssw'
-
-        elif self.direction == 'ssw':
-            self.direction = 'sw'
-
-        elif self.direction == 'sw':
-            self.direction = 'wsw'
-
-        elif self.direction == 'wsw':
-            self.direction = 'w'
-
-        elif self.direction == 'w':
-            self.direction = 'wnw'
-
-        elif self.direction == 'wnw':
-            self.direction = 'nw'
-
-        elif self.direction == 'nw':
             self.direction = 'nnw'
 
-        elif self.direction == 'nnw':
+        elif self.direction == 'nne':
             self.direction = 'n'
+
+        elif self.direction == 'ne':
+            self.direction = 'nne'
+
+        elif self.direction == 'ene':
+            self.direction = 'ne'
+
+        elif self.direction == 'e':
+            self.direction = 'ene'
+            
+        elif self.direction == 'ese':
+            self.direction = 'e'
+
+        elif self.direction == 'se':
+            self.direction = 'ese'
+
+        elif self.direction == 'sse':
+            self.direction = 'se'
+
+        elif self.direction == 's':
+            self.direction = 'sse'
+
+        elif self.direction == 'ssw':
+            self.direction = 's'
+
+        elif self.direction == 'sw':
+            self.direction = 'ssw'
+
+        elif self.direction == 'wsw':
+            self.direction = 'sw'
+
+        elif self.direction == 'w':
+            self.direction = 'wsw'
+
+        elif self.direction == 'wnw':
+            self.direction = 'w'
+
+        elif self.direction == 'nw':
+            self.direction = 'wnw'
+
+        elif self.direction == 'nnw':
+            self.direction = 'nw'
 
         self.x_pos += self.x_vel * self.dt 
         self.y_pos += self.y_vel * self.dt
@@ -319,6 +322,14 @@ class DetectSimulator():
         elif self.direction == 'sw':
             self.direction = 'se'
 
+    def print_msg_details(self,msg):
+        print("%d, %i,: Msg: [x:%0.3f, y:%0.3f, vx: %0.3f, vy: %0.3f]" %
+              (self.niter, msg.header.stamp.secs,
+               msg.pose.pose.position.x,
+               msg.pose.pose.position.y,
+               msg.twist.twist.linear.x,
+               msg.twist.twist.linear.y))
+
     def run(self):
         
         self.pub_detects = rospy.Publisher('/detects', Detect, queue_size=1)
@@ -334,19 +345,23 @@ class DetectSimulator():
             coin_flip = 1
             msg.sensor_id = self.name
             msg.header.frame_id = "map"
-            msg.pose.covariance = [3., 0., nan, nan, nan, nan,
-                                   0., 3., nan, nan, nan, nan,
+            # Here I'm matching setting the velocity noise to what the user specified, but
+            # arbitrarily setting the pose to 10x that.
+            msg.pose.covariance = [(self.velocity_noise)**2 * 10, 0., nan, nan, nan, nan,
+                                   0., (self.velocity_noise)**2 * 10, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan]
-            msg.twist.covariance = [1.0, 0., nan, nan, nan, nan,
-                                   0., 1.0, nan, nan, nan, nan,
+            msg.twist.covariance = [self.velocity_noise**2, 0., nan, nan, nan, nan,
+                                   0., self.velocity_noise**2, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan,
                                    nan, nan, nan, nan, nan, nan]
-            
+
+
+
             # Generate message with position and velocity
             if coin_flip > 0:
                 if self.direction != 'none':
@@ -354,44 +369,43 @@ class DetectSimulator():
                  
                 # This mess allows the simulator to execute 45 degree turns 
                 # in 2 22.5 degree steps to slow the turn rate and (hopefully)
-                # make more realistically moving targets. 
-                if self.slow_turn_blinker == 'right':
-                    self.slow_turn_right()
-                    self.slow_turn_blinker = 'off'                    
+                # make more realistically moving targets.
+                if self.slowTurns:
 
-                if self.slow_turn_blinker == 'left':
-                    self.slow_turn_left()
-                    self.slow_turn_blinker = 'off'
-                    
-
-                if self.niter % 30 == 0:
-
-                    if np.random.randn() >= 0 and self.slow_turn_blinker == 'off':                    
-                        self.slow_turn_blinker = 'right'
+                    # These two blocks finishes a slow turn that's already been initiated.
+                    if self.slow_turn_blinker == 'right':
                         self.slow_turn_right()
-                    elif self.slow_turn_blinker == 'off':
-                        self.slow_turn_blinker = 'left'
+                        self.slow_turn_blinker = 'off'
+
+                    if self.slow_turn_blinker == 'left':
                         self.slow_turn_left()
-                    
-                    '''
-                    if np.random.randn() >= 0.:
-                        self.turn_right()
-                    else:
-                        self.turn_left()
-                    '''
+                        self.slow_turn_blinker = 'off'
+
+                    # This block initiates a slow turn.
+                    if self.niter % 30 == 0:
+
+                        if np.random.randn() >= 0 and self.slow_turn_blinker == 'off':
+                            self.slow_turn_blinker = 'right'
+                            self.slow_turn_right()
+                        elif self.slow_turn_blinker == 'off':
+                            self.slow_turn_blinker = 'left'
+                            self.slow_turn_left()
+                else:
+                    # Sharp turns.
+                    if self.niter % 30 == 0:
+                        if np.random.randn() >= 0.:
+                            self.turn_right()
+                        else:
+                            self.turn_left()
+
 
                 msg.pose.pose.position.x = self.x_pos
                 msg.pose.pose.position.y = self.y_pos
-                msg.twist.twist.linear.x = self.x_vel
-                msg.twist.twist.linear.y = self.y_vel
+                msg.twist.twist.linear.x = float('nan')
+                msg.twist.twist.linear.y = float('nan')
+                # msg.twist.twist.linear.x = self.x_vel
+                # msg.twist.twist.linear.y = self.y_vel
 
-                print("%d, %i,: Msg: [x:%0.3f, y:%0.3f, vx: %0.3f, vy: %0.3f]" %
-                      (self.niter, msg.header.stamp.secs,
-                       msg.pose.pose.position.x,
-                       msg.pose.pose.position.y,
-                       msg.twist.twist.linear.x,
-                       msg.twist.twist.linear.y))
-            
             # Generate message with position and not velocity
             elif coin_flip < 0 and coin_flip >= -1:
                 if self.direction != 'none':
@@ -416,9 +430,16 @@ class DetectSimulator():
             ######################
             self.niter += 1
             if self.return_enabled:
+                # Pauses entire simulation until return is pressed.
                 raw_input()
-
-            self.pub_detects.publish(msg)
+                self.print_msg_details(msg)
+                self.pub_detects.publish(msg)
+            else:
+                # Simulation continues but detects are only reported at the report interval.
+                if self.niter % self.report_interval == 0:
+                    self.print_msg_details(msg)
+                    self.pub_detects.publish(msg)
+            #self.pub_detects.publish(msg)
             rospy.sleep(d)
 
 
@@ -433,6 +454,9 @@ def main():
     arg_parser.add_argument('-show_plot', type=bool, help='plot the course the simulation followed')
     arg_parser.add_argument('-o', type=str, help='path to save the plot produced, default: tracker_plot, current working directory', default='sim_plot')
     arg_parser.add_argument('-name', type=str, help='identifier for this node')
+    arg_parser.add_argument('-noise',type=float,help='1-sigma modeled noise in x and y speed components, m/s',
+                            default=0.5)
+    arg_parser.add_argument('-report_interval', type=float,default=1,help='Specifies seconds between detect publishings.')
     args = arg_parser.parse_args(rospy.myargv()[1:])
 
     rospy.init_node('detect_simulator')
