@@ -14,7 +14,7 @@ import math
 from filterpy.kalman import IMMEstimator
 from filterpy.common import Q_continuous_white_noise
 import contact_kf as CKF
-from marine_msgs.msg import Detect, Contact
+from .msg import Detect, Contact
 import time
 
 class Contact:

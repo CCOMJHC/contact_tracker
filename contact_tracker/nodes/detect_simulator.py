@@ -14,7 +14,7 @@ from numpy.random import randn
 import numpy as np
 import matplotlib.pyplot as plt
 
-from marine_msgs.msg import Detect
+from .msg import Detect
 
 
 class DetectSimulator():

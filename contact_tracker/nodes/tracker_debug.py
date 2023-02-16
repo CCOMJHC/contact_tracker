@@ -21,7 +21,7 @@ from copy import deepcopy
 import contact_tracker.contact
 import contact_tracker.contact_kf
 from contact_tracker.cfg import contact_trackerConfig
-from marine_msgs.msg import Detect, Contact
+from .msg import Detect, Contact
 from geographic_visualization_msgs.msg import GeoVizItem, GeoVizPointList
 from geographic_visualization_msgs.msg import GeoVizPolygon, GeoVizSimplePolygon
 from geographic_msgs.msg import GeoPoint

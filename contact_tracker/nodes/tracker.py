@@ -14,7 +14,7 @@ import datetime
 import argparse
 
 import contact_tracker.contact
-from marine_msgs.msg import Detect
+from .msg import Detect
 
 from filterpy.kalman import KalmanFilter
 from filterpy.kalman import update
