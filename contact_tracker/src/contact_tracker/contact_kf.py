@@ -400,4 +400,80 @@ class ContactKalmanFilter(KalmanFilter):
 
 
        
+    def UKF_ToMeasurementRTheta(self,Xos,Yos):
+        """
+        For an Unscented Kalman Filter Implmenetation - A utility method for
+        implementing an Unscented Kalman Filter that converts the internal UKF
+        state (in this case in Cartesian coordinates) to radial measurements
+        :param Xos: Own-ship X coordinate at the time of measurement.
+        :param Yos: Own-ship Y coordinate at the time of measuremnet.
+        :return: [R, Theta]
+        where R is the range to the contact and Theta is the azimuthal angle.
+        """
 
+        dx = self.x[0] - Xos
+        dy = self.x[1] - Yos
+        R = np.sqrt(dx**2 + dy**2)
+        Theta = np.arctan2(dy,dx)
+        return [R,Theta]
+
+    def UDK_To_MeasurementR(self,Xos,Yos):
+        """
+        For an Unscented Kalman Filter Implmenetation - A utility method for
+        implementing an Unscented Kalman Filter that converts the internal UKF
+        state (in this case in Cartesian coordinates) to range-only measurements
+        :param Xos: Own-ship X coordinate at the time of measurement.
+        :param Yos: Own-ship Y coordinate at the time of measuremnet.
+        :return: [R]
+        where R is the range to the contact.
+        """
+
+        dx = self.x[0] - Xos
+        dy = self.x[1] - Yos
+        R = np.sqrt(dx**2 + dy**2)
+        return [R]
+
+    def UDK_To_MeasurementTheta(self,Xos,Yos):
+        """
+        For an Unscented Kalman Filter Implmenetation - A utility method for
+        implementing an Unscented Kalman Filter that converts the internal UKF
+        state (in this case in Cartesian coordinates) to range-only measurements
+        :param Xos: Own-ship X coordinate at the time of measurement.
+        :param Yos: Own-ship Y coordinate at the time of measuremnet.
+        :return: [R]
+        where R is the range to the contact.
+        """
+
+        dx = self.x[0] - Xos
+        dy = self.x[1] - Yos
+        Theta = np.arctan2(dy,dx)
+        return [Theta]
+
+    def normalizeAngle(self,theta):
+        """
+        For an Unscented Kalman Filter Implementation - a utility method to
+        ensure angles considered fall within -pi - pi.
+        :param theta: Angle to normalize.
+        :return: theta: The normalized angle.
+        """
+
+        theta = theta % (2.0 * np.pi)
+        if theta > np.pi:
+            theta -= (2*np.pi)
+        return theta
+
+    def UKF_innovation(self,Z):
+        """
+        A method to calculate the Kalman Filter "innovation" for an
+        Unscented Kalman Filter which measures in polar coordinates
+        (range and angle) but tracks in Cartesian coordinates, handling
+        the case when the difference in the angle measurement and the
+        the angle estimate wraps.
+        :param Z:
+        :return:
+        """
+        y = Z - dot(self.H,self.x)
+        y[2] = self.normalizeAngle(y[2])
+        return y
+
+    
